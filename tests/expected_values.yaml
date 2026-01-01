@@ -40,6 +40,18 @@ modulation_suppression:
       tolerance: 0.01
   severity: 0.7
   signal_type: modulated
+modulation_composite:
+  degradation: modulation_suppression
+  description: AM+FM composite with envelope flattening.
+  metrics:
+    mps_correlation:
+      expected: 0.9157328604084232
+      tolerance: 0.05
+    mps_distance:
+      expected: 0.006346886377376469
+      tolerance: 0.01
+  severity: 0.65
+  signal_type: modulated
 noise_floor:
   degradation: noise
   description: white noise at roughly -60 dBFS.

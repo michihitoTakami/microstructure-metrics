@@ -4,7 +4,7 @@ import csv
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import click
 
@@ -142,6 +142,80 @@ DEFAULT_JSON = "metrics_report.json"
     show_default=True,
     help="NPS のノッチQ",
 )
+@click.option(
+    "--mps-filterbank",
+    type=click.Choice(["gammatone", "mel"]),
+    default="gammatone",
+    show_default=True,
+    help="MPS用の聴覚フィルタバンクを選択",
+)
+@click.option(
+    "--mps-filterbank-order",
+    type=click.IntRange(min=1),
+    default=4,
+    show_default=True,
+    help="melフィルタバンクのIIR次数（gammatoneでは無視）",
+)
+@click.option(
+    "--mps-filterbank-bandwidth-scale",
+    type=click.FloatRange(min=0.1),
+    default=1.0,
+    show_default=True,
+    help="mel帯域幅スケール（gammatoneでは無視）",
+)
+@click.option(
+    "--mps-envelope-method",
+    type=click.Choice(["hilbert", "rectify"]),
+    default="hilbert",
+    show_default=True,
+    help="MPS包絡抽出手法（ヒルベルト or 整流）",
+)
+@click.option(
+    "--mps-envelope-lpf-hz",
+    default=64.0,
+    show_default=True,
+    help="包絡ローパスのカットオフ(Hz)。0以下で無効化",
+)
+@click.option(
+    "--mps-envelope-lpf-order",
+    type=click.IntRange(min=1),
+    default=4,
+    show_default=True,
+    help="包絡ローパスの次数",
+)
+@click.option(
+    "--mps-mod-scale",
+    type=click.Choice(["linear", "log"]),
+    default="linear",
+    show_default=True,
+    help="変調周波数軸スケール",
+)
+@click.option(
+    "--mps-num-mod-bins",
+    type=click.IntRange(min=2),
+    help="mod_scale=log時のbin数（省略時は元bin数）",
+)
+@click.option(
+    "--mps-scale",
+    type=click.Choice(["power", "log"]),
+    default="power",
+    show_default=True,
+    help="MPSのスケール（powerまたはlog）",
+)
+@click.option(
+    "--mps-norm",
+    type=click.Choice(["global", "per_band", "none"]),
+    default="global",
+    show_default=True,
+    help="MPS類似度の正規化モード",
+)
+@click.option(
+    "--mps-band-weighting",
+    type=click.Choice(["none", "energy"]),
+    default="none",
+    show_default=True,
+    help="帯域重み付け: none/energy(参照MPSのエネルギーで重み付け)",
+)
 def report(
     reference: str,
     dut: str,
@@ -163,6 +237,17 @@ def report(
     expected_level_dbfs: float,
     notch_center_hz: float,
     notch_q: float,
+    mps_filterbank: str,
+    mps_filterbank_order: int,
+    mps_filterbank_bandwidth_scale: float,
+    mps_envelope_method: str,
+    mps_envelope_lpf_hz: float,
+    mps_envelope_lpf_order: int,
+    mps_mod_scale: str,
+    mps_num_mod_bins: int | None,
+    mps_scale: str,
+    mps_norm: str,
+    mps_band_weighting: str,
 ) -> None:
     """リファレンス/DUT WAVを整列し、全指標を計算してレポートする。"""
     try:
@@ -223,6 +308,19 @@ def report(
         expected_level_dbfs=expected_level_dbfs,
         notch_center_hz=notch_center_hz,
         notch_q=notch_q,
+        mps_filterbank=mps_filterbank,
+        mps_filterbank_kwargs={
+            "order": mps_filterbank_order,
+            "bandwidth_scale": mps_filterbank_bandwidth_scale,
+        },
+        mps_envelope_method=mps_envelope_method,
+        mps_envelope_lpf_hz=mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None,
+        mps_envelope_lpf_order=mps_envelope_lpf_order,
+        mps_mod_scale=mps_mod_scale,
+        mps_num_mod_bins=mps_num_mod_bins,
+        mps_scale=mps_scale,
+        mps_norm=mps_norm,
+        mps_band_weighting=mps_band_weighting,
     )
 
     report_payload = {
@@ -267,6 +365,16 @@ def _calculate_metrics(
     expected_level_dbfs: float,
     notch_center_hz: float,
     notch_q: float,
+    mps_filterbank: str,
+    mps_filterbank_kwargs: dict[str, float | int | None],
+    mps_envelope_method: str,
+    mps_envelope_lpf_hz: float | None,
+    mps_envelope_lpf_order: int,
+    mps_mod_scale: str,
+    mps_num_mod_bins: int | None,
+    mps_scale: str,
+    mps_norm: str,
+    mps_band_weighting: str,
 ) -> dict[str, dict[str, object]]:
     """各指標を計算し、JSONに載せやすい辞書へまとめる。"""
     thd = calculate_thd_n(
@@ -291,6 +399,16 @@ def _calculate_metrics(
         reference=aligned_ref,
         dut=aligned_dut,
         sample_rate=sample_rate,
+        filterbank=cast(Literal["gammatone", "mel"], mps_filterbank),
+        filterbank_kwargs=mps_filterbank_kwargs,
+        envelope_method=cast(Literal["hilbert", "rectify"], mps_envelope_method),
+        envelope_lowpass_hz=mps_envelope_lpf_hz,
+        envelope_lowpass_order=mps_envelope_lpf_order,
+        mod_scale=cast(Literal["linear", "log"], mps_mod_scale),
+        num_mod_bins=mps_num_mod_bins,
+        mps_scale=cast(Literal["power", "log"], mps_scale),
+        mps_norm=cast(Literal["global", "per_band", "none"], mps_norm),
+        band_weighting=cast(Literal["none", "energy"], mps_band_weighting),
     )
     tfs = calculate_tfs_correlation(
         reference=aligned_ref,

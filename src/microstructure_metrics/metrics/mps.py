@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Final, Literal, cast
 
 import numpy as np
 import numpy.typing as npt
 from scipy import signal as sp_signal
 
-from microstructure_metrics.filterbank import GammatoneFilterbank
+from microstructure_metrics.filterbank import GammatoneFilterbank, MelFilterbank
 
-EPS = 1e-12
+EPS: Final = 1e-12
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,13 @@ def calculate_mps(
     envelope_lowpass_hz: float | None = 64.0,
     modulation_fft_size: int | None = None,
     remove_dc: bool = True,
+    filterbank: Literal["gammatone", "mel"] = "gammatone",
+    filterbank_kwargs: Mapping[str, float | int | None] | None = None,
+    envelope_method: Literal["hilbert", "rectify"] = "hilbert",
+    envelope_lowpass_order: int = 4,
+    mod_scale: Literal["linear", "log"] = "linear",
+    num_mod_bins: int | None = None,
+    mps_scale: Literal["power", "log"] = "power",
 ) -> MPSResult:
     """変調パワースペクトラム(MPS)を計算する。
 
@@ -56,6 +65,13 @@ def calculate_mps(
             Noneで無効。
         modulation_fft_size: 変調スペクトルFFTサイズ。Noneで信号長から自動決定。
         remove_dc: 包絡の平均値を除去してDC漏れを抑えるか。
+        filterbank: 聴覚フィルタの種類（gammatone/mel）。
+        filterbank_kwargs: フィルタバンク固有パラメータ（例: width, order）。
+        envelope_method: 包絡検出手法（hilbert or rectify）。
+        envelope_lowpass_order: 包絡LPFの次数。
+        mod_scale: 変調周波数軸のスケール（linear/log）。
+        num_mod_bins: mod_scale=log時のリサンプル先bin数(Noneなら元bin数)。
+        mps_scale: パワースペクトラムのスケール（power/log）。
 
     Returns:
         MPSResult
@@ -78,30 +94,63 @@ def calculate_mps(
     nyquist = sample_rate / 2
     if mod_high >= nyquist:
         raise ValueError("mod_freq_range high must be below Nyquist")
+    if num_mod_bins is not None and num_mod_bins < 2:
+        raise ValueError("num_mod_bins must be >= 2 when provided")
+    if envelope_method not in {"hilbert", "rectify"}:
+        raise ValueError("envelope_method must be 'hilbert' or 'rectify'")
+    if envelope_lowpass_order < 1:
+        raise ValueError("envelope_lowpass_order must be >= 1")
+    if mod_scale not in {"linear", "log"}:
+        raise ValueError("mod_scale must be 'linear' or 'log'")
+    if mps_scale not in {"power", "log"}:
+        raise ValueError("mps_scale must be 'power' or 'log'")
 
-    fb = GammatoneFilterbank(
-        sample_rate=sample_rate,
-        num_filters=num_audio_bands,
-        low_freq=audio_low,
-        high_freq=min(audio_high, nyquist * 0.99),
-    )
+    high_limit = min(audio_high, nyquist * 0.99)
+    fb_kwargs = dict(filterbank_kwargs or {})
+    fb: GammatoneFilterbank | MelFilterbank
+    if filterbank == "gammatone":
+        width = (
+            float(fb_kwargs["width"])
+            if "width" in fb_kwargs and fb_kwargs["width"] is not None
+            else 1.0
+        )
+        fb = GammatoneFilterbank(
+            sample_rate=sample_rate,
+            num_filters=num_audio_bands,
+            low_freq=audio_low,
+            high_freq=high_limit,
+            width=width,
+        )
+    else:
+        mel_order = (
+            int(fb_kwargs["order"])
+            if "order" in fb_kwargs and fb_kwargs["order"] is not None
+            else 4
+        )
+        mel_bandwidth = (
+            float(fb_kwargs["bandwidth_scale"])
+            if "bandwidth_scale" in fb_kwargs
+            and fb_kwargs["bandwidth_scale"] is not None
+            else 1.0
+        )
+        fb = MelFilterbank(
+            sample_rate=sample_rate,
+            num_filters=num_audio_bands,
+            low_freq=audio_low,
+            high_freq=high_limit,
+            order=mel_order,
+            bandwidth_scale=mel_bandwidth,
+        )
     band_signals = fb.analyze(data)
 
-    envelopes = np.abs(sp_signal.hilbert(band_signals, axis=1))
-    if envelope_lowpass_hz is not None:
-        if envelope_lowpass_hz <= 0 or envelope_lowpass_hz >= nyquist:
-            raise ValueError("envelope_lowpass_hz must be in (0, Nyquist)")
-        sos = sp_signal.butter(
-            4,
-            envelope_lowpass_hz,
-            btype="low",
-            fs=sample_rate,
-            output="sos",
-        )
-        envelopes = sp_signal.sosfiltfilt(sos, envelopes, axis=1)
-
-    if remove_dc:
-        envelopes = envelopes - np.mean(envelopes, axis=1, keepdims=True)
+    envelopes = _extract_envelopes(
+        band_signals=band_signals,
+        method=envelope_method,
+        sample_rate=sample_rate,
+        lowpass_hz=envelope_lowpass_hz,
+        lowpass_order=envelope_lowpass_order,
+        remove_dc=remove_dc,
+    )
 
     n_fft = modulation_fft_size or _next_pow_two(envelopes.shape[1])
     mod_spectrum = np.fft.rfft(envelopes, n=n_fft, axis=1)
@@ -113,11 +162,23 @@ def calculate_mps(
     if not np.any(mod_mask):
         raise ValueError("mod_freq_range removes all modulation bins")
 
+    mod_axis = mod_freqs[mod_mask]
     mps_matrix = np.abs(mod_spectrum[:, mod_mask]) ** 2
+    if mod_scale == "log":
+        target_bins = num_mod_bins or mod_axis.size
+        log_freqs = np.geomspace(mod_low, mod_high, num=target_bins)
+        mps_matrix = _interpolate_mod_axis(
+            mps_matrix, source_freqs=mod_axis, target_freqs=log_freqs
+        )
+        mod_axis = log_freqs
+
+    if mps_scale == "log":
+        mps_matrix = _power_to_db(mps_matrix)
+
     return MPSResult(
         mps_matrix=np.asarray(mps_matrix, dtype=np.float64),
         audio_freqs=np.asarray(fb.center_frequencies, dtype=np.float64),
-        mod_freqs=np.asarray(mod_freqs[mod_mask], dtype=np.float64),
+        mod_freqs=np.asarray(mod_axis, dtype=np.float64),
     )
 
 
@@ -131,6 +192,16 @@ def calculate_mps_similarity(
     num_audio_bands: int = 48,
     envelope_lowpass_hz: float | None = 64.0,
     modulation_fft_size: int | None = None,
+    filterbank: Literal["gammatone", "mel"] = "gammatone",
+    filterbank_kwargs: Mapping[str, float | int | None] | None = None,
+    envelope_method: Literal["hilbert", "rectify"] = "hilbert",
+    envelope_lowpass_order: int = 4,
+    mod_scale: Literal["linear", "log"] = "linear",
+    num_mod_bins: int | None = None,
+    mps_scale: Literal["power", "log"] = "power",
+    mps_norm: Literal["global", "per_band", "none"] = "global",
+    band_weights: npt.ArrayLike | None = None,
+    band_weighting: Literal["none", "energy"] = "none",
 ) -> MPSSimilarityResult:
     """入出力のMPS類似度（相関/距離）を計算する。"""
 
@@ -151,6 +222,13 @@ def calculate_mps_similarity(
         num_audio_bands=num_audio_bands,
         envelope_lowpass_hz=envelope_lowpass_hz,
         modulation_fft_size=modulation_fft_size,
+        filterbank=filterbank,
+        filterbank_kwargs=filterbank_kwargs,
+        envelope_method=envelope_method,
+        envelope_lowpass_order=envelope_lowpass_order,
+        mod_scale=mod_scale,
+        num_mod_bins=num_mod_bins,
+        mps_scale=mps_scale,
     )
     dut_result = calculate_mps(
         signal=du,
@@ -160,12 +238,27 @@ def calculate_mps_similarity(
         num_audio_bands=num_audio_bands,
         envelope_lowpass_hz=envelope_lowpass_hz,
         modulation_fft_size=modulation_fft_size,
+        filterbank=filterbank,
+        filterbank_kwargs=filterbank_kwargs,
+        envelope_method=envelope_method,
+        envelope_lowpass_order=envelope_lowpass_order,
+        mod_scale=mod_scale,
+        num_mod_bins=num_mod_bins,
+        mps_scale=mps_scale,
     )
 
-    ref_norm = _normalize_matrix(ref_result.mps_matrix)
-    dut_norm = _normalize_matrix(dut_result.mps_matrix)
-    ref_band_norm = _normalize_rows(ref_result.mps_matrix)
-    dut_band_norm = _normalize_rows(dut_result.mps_matrix)
+    weights = _resolve_band_weights(
+        weighting=band_weighting,
+        explicit_weights=band_weights,
+        reference_mps=ref_result.mps_matrix,
+    )
+    ref_weighted = _apply_band_weights(ref_result.mps_matrix, weights)
+    dut_weighted = _apply_band_weights(dut_result.mps_matrix, weights)
+
+    ref_norm = _normalize_mps(ref_weighted, mode=mps_norm)
+    dut_norm = _normalize_mps(dut_weighted, mode=mps_norm)
+    ref_band_norm = _normalize_rows(ref_weighted)
+    dut_band_norm = _normalize_rows(dut_weighted)
 
     mps_correlation = _pearson(ref_norm.ravel(), dut_norm.ravel())
     mps_distance = float(np.sqrt(np.mean(np.square(ref_norm - dut_norm))))
@@ -183,6 +276,115 @@ def calculate_mps_similarity(
         audio_freqs=ref_result.audio_freqs,
         mod_freqs=ref_result.mod_freqs,
     )
+
+
+def _extract_envelopes(
+    *,
+    band_signals: npt.NDArray[np.float64],
+    method: Literal["hilbert", "rectify"],
+    sample_rate: int,
+    lowpass_hz: float | None,
+    lowpass_order: int,
+    remove_dc: bool,
+) -> npt.NDArray[np.float64]:
+    if method == "hilbert":
+        envelope_raw = np.abs(sp_signal.hilbert(band_signals, axis=1))
+    else:
+        envelope_raw = np.abs(band_signals)
+
+    envelopes: npt.NDArray[np.float64] = cast(
+        npt.NDArray[np.float64], np.asarray(envelope_raw, dtype=np.float64)
+    )
+
+    envelopes = _apply_lowpass(
+        envelopes,
+        cutoff_hz=lowpass_hz,
+        sample_rate=sample_rate,
+        order=lowpass_order,
+    )
+
+    if remove_dc:
+        envelopes = envelopes - np.mean(envelopes, axis=1, keepdims=True)
+    return envelopes
+
+
+def _apply_lowpass(
+    data: npt.NDArray[np.float64],
+    *,
+    cutoff_hz: float | None,
+    sample_rate: int,
+    order: int,
+) -> npt.NDArray[np.float64]:
+    if cutoff_hz is None:
+        return np.asarray(data, dtype=np.float64)
+    nyquist = sample_rate / 2
+    if cutoff_hz <= 0 or cutoff_hz >= nyquist:
+        raise ValueError("envelope_lowpass_hz must be in (0, Nyquist)")
+    sos = sp_signal.butter(order, cutoff_hz, btype="low", fs=sample_rate, output="sos")
+    return np.asarray(sp_signal.sosfiltfilt(sos, data, axis=1), dtype=np.float64)
+
+
+def _interpolate_mod_axis(
+    matrix: npt.NDArray[np.float64],
+    *,
+    source_freqs: npt.NDArray[np.float64],
+    target_freqs: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    if source_freqs.ndim != 1 or target_freqs.ndim != 1:
+        raise ValueError("frequency axes must be 1-D")
+    if source_freqs.size < 2:
+        return np.asarray(matrix, dtype=np.float64)
+    interpolated = np.zeros((matrix.shape[0], target_freqs.size), dtype=np.float64)
+    for idx, row in enumerate(matrix):
+        interpolated[idx] = np.asarray(
+            np.interp(target_freqs, source_freqs, row), dtype=np.float64
+        )
+    return np.asarray(interpolated, dtype=np.float64)
+
+
+def _power_to_db(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    return 10.0 * np.log10(np.maximum(matrix, EPS))
+
+
+def _resolve_band_weights(
+    *,
+    weighting: Literal["none", "energy"],
+    explicit_weights: npt.ArrayLike | None,
+    reference_mps: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    if weighting not in {"none", "energy"}:
+        raise ValueError("band_weighting must be 'none' or 'energy'")
+
+    if explicit_weights is not None:
+        weights = np.asarray(explicit_weights, dtype=np.float64).ravel()
+    elif weighting == "energy":
+        energy = np.sum(np.maximum(reference_mps, 0.0), axis=1)
+        max_energy = float(np.max(energy)) if energy.size else 0.0
+        weights = energy / max(max_energy, EPS)
+    else:
+        weights = np.ones(reference_mps.shape[0], dtype=np.float64)
+
+    if weights.size != reference_mps.shape[0]:
+        raise ValueError("band_weights length must match number of bands")
+    return np.asarray(weights, dtype=np.float64)
+
+
+def _apply_band_weights(
+    matrix: npt.NDArray[np.float64], weights: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
+    return np.asarray(matrix * weights[:, None], dtype=np.float64)
+
+
+def _normalize_mps(
+    matrix: npt.NDArray[np.float64], *, mode: Literal["global", "per_band", "none"]
+) -> npt.NDArray[np.float64]:
+    if mode == "none":
+        return np.asarray(matrix, dtype=np.float64)
+    if mode == "global":
+        return _normalize_matrix(matrix)
+    if mode == "per_band":
+        return _normalize_rows(matrix)
+    raise ValueError("mps_norm must be 'global', 'per_band', or 'none'")
 
 
 def _next_pow_two(n: int) -> int:
