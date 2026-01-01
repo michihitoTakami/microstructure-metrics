@@ -1,5 +1,11 @@
 """Metric implementations."""
 
+from microstructure_metrics.metrics.mps import (
+    MPSResult,
+    MPSSimilarityResult,
+    calculate_mps,
+    calculate_mps_similarity,
+)
 from microstructure_metrics.metrics.nps import NPSResult, calculate_nps
 from microstructure_metrics.metrics.spectral_entropy import (
     DeltaSEResult,
@@ -16,6 +22,10 @@ __all__ = [
     "calculate_thd_n",
     "NPSResult",
     "calculate_nps",
+    "MPSResult",
+    "MPSSimilarityResult",
+    "calculate_mps",
+    "calculate_mps_similarity",
     "SpectralEntropyResult",
     "DeltaSEResult",
     "calculate_spectral_entropy",
