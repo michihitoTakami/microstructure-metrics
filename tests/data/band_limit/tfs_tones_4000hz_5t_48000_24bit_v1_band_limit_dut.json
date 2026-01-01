@@ -1,0 +1,25 @@
+{
+  "signal_type": "tfs_tones",
+  "sample_rate": 48000,
+  "bit_depth": "24bit",
+  "channels": 1,
+  "duration_sec": 2.4,
+  "pilot_tone_freq_hz": 1000.0,
+  "pilot_duration_ms": 100,
+  "pilot_level_dbfs": -6.0,
+  "lead_silence_ms": 500,
+  "tail_silence_ms": 500,
+  "created_at": "2026-01-01T18:53:14.085215+00:00",
+  "version": "1.0.0",
+  "tones_hz": [
+    4000.0,
+    6000.0,
+    8000.0,
+    10000.0,
+    12000.0
+  ],
+  "tone_level_dbfs": -6.0,
+  "degradation": "band_limit",
+  "severity": 0.8,
+  "rng_seed": 0
+}
