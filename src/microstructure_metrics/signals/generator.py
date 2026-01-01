@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 import numpy.typing as npt
+from numpy.random import Generator
 from scipy import signal
 
 DEFAULT_VERSION = "1.0.0"
@@ -69,6 +70,7 @@ def build_signal(
     signal_type: str,
     *,
     common: CommonSignalConfig,
+    rng: Generator | None = None,
     tone_freq: float = 1000.0,
     tone_level_dbfs: float = -3.0,
     notch_center: float = 8000.0,
@@ -92,7 +94,7 @@ def build_signal(
     sample_rate = common.sample_rate
     body_duration = max(common.duration, 0.01)
     samples = int(body_duration * sample_rate)
-    rng = np.random.default_rng()
+    rng = rng or np.random.default_rng()
 
     if normalized_type == "thd":
         body = _generate_sine(freq=tone_freq, sample_rate=sample_rate, samples=samples)

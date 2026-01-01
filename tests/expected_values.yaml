@@ -1,0 +1,96 @@
+band_limit:
+  degradation: band_limit
+  description: 10 kHz low-pass to emulate bandwidth limitation.
+  metrics:
+    mps_correlation:
+      expected: 0.9955767451447883
+      tolerance: 0.05
+    mps_distance:
+      expected: 0.0014395500504565618
+      tolerance: 0.01
+    tfs_mean_correlation:
+      expected: 0.9438451903855913
+      tolerance: 0.05
+    tfs_phase_coherence:
+      expected: 0.94644920262413
+      tolerance: 0.05
+  severity: 0.8
+  signal_type: tfs-tones
+harmonic_distortion:
+  degradation: harmonic_distortion
+  description: 2nd/3rd harmonic injection around -60 dB.
+  metrics:
+    sinad_db:
+      expected: 49.98927867578517
+      tolerance: 2.0
+    thd_n_db:
+      expected: -49.98927867578517
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: thd
+modulation_suppression:
+  degradation: modulation_suppression
+  description: flatten AM depth with envelope smoothing.
+  metrics:
+    mps_correlation:
+      expected: 0.959859843369868
+      tolerance: 0.05
+    mps_distance:
+      expected: 0.004380073607409083
+      tolerance: 0.01
+  severity: 0.7
+  signal_type: modulated
+noise_floor:
+  degradation: noise
+  description: white noise at roughly -60 dBFS.
+  metrics:
+    delta_se_mean:
+      expected: 1.9687409651910213e-06
+      tolerance: 0.01
+    thd_n_db:
+      expected: -61.90314971189964
+      tolerance: 2.0
+  severity: 0.6
+  signal_type: thd
+notch_fill:
+  degradation: notch_fill
+  description: fill the spectral notch with band-limited noise.
+  metrics:
+    dut_notch_depth_db:
+      expected: 2.5746943060766676
+      tolerance: 2.0
+    nps_db:
+      expected: -1.3598186742239031
+      tolerance: 2.0
+    ref_notch_depth_db:
+      expected: 3.9345129803005707
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: notched-noise
+phase_distortion:
+  degradation: phase_distortion
+  description: slow phase warp via all-pass style modulation.
+  metrics:
+    tfs_mean_correlation:
+      expected: 0.9396838519319823
+      tolerance: 0.05
+    tfs_phase_coherence:
+      expected: 0.9297140544040522
+      tolerance: 0.05
+  severity: 0.75
+  signal_type: tfs-tones
+soft_clipping:
+  degradation: soft_clipping
+  description: tanh soft clipping to introduce broadband distortion.
+  metrics:
+    delta_se_max:
+      expected: 0.023256419923396998
+      tolerance: 0.01
+    delta_se_mean:
+      expected: 0.002626542811451096
+      tolerance: 0.01
+    nps_db:
+      expected: -0.032210562844252756
+      tolerance: 2.0
+  severity: 0.65
+  signal_type: pink-noise
