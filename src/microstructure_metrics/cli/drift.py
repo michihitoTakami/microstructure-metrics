@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import click
+import numpy as np
 import soundfile as sf
 
 from microstructure_metrics.alignment import (
@@ -18,18 +19,16 @@ DEFAULT_BAND_WIDTH_HZ = 200.0
 DEFAULT_THRESHOLD = 0.3
 
 
-def _load_mono(path: Path) -> tuple[list[float], int]:
+def _load_mono(path: Path) -> tuple[np.ndarray, int]:
     data, sr = sf.read(path)
     if data.ndim == 2:
         data = data[:, 0]
-    return data.tolist(), sr
+    return np.asarray(data, dtype=np.float64), sr
 
 
 @click.command(name="drift")
-@click.argument(
-    "reference", type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
-@click.argument("dut", type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.argument("reference", type=click.Path(exists=True, dir_okay=False))
+@click.argument("dut", type=click.Path(exists=True, dir_okay=False))
 @click.option(
     "--pilot-freq",
     default=DEFAULT_PILOT_FREQ,
@@ -56,7 +55,7 @@ def _load_mono(path: Path) -> tuple[list[float], int]:
 )
 @click.option(
     "--json-output",
-    type=click.Path(dir_okay=False, path_type=Path),
+    type=click.Path(dir_okay=False),
     help="ドリフト警告をJSONで出力するパス（未指定なら書き出しなし）",
 )
 @click.option(
@@ -66,18 +65,20 @@ def _load_mono(path: Path) -> tuple[list[float], int]:
     help="重大度 high/critical をエラー扱いにする",
 )
 def drift(
-    reference: Path,
-    dut: Path,
+    reference: str,
+    dut: str,
     pilot_freq: float,
     pilot_duration_ms: int,
     band_width_hz: float,
     threshold: float,
-    json_output: Path | None,
+    json_output: str | None,
     strict: bool,
 ) -> None:
     """パイロットトーンからクロックドリフトを推定し警告を表示する."""
-    ref_data, ref_sr = _load_mono(reference)
-    dut_data, dut_sr = _load_mono(dut)
+    ref_path = Path(reference)
+    dut_path = Path(dut)
+    ref_data, ref_sr = _load_mono(ref_path)
+    dut_data, dut_sr = _load_mono(dut_path)
     if ref_sr != dut_sr:
         raise click.BadParameter("reference と dut のサンプルレートが一致しません。")
 
@@ -110,9 +111,10 @@ def drift(
 
     if json_output:
         payload = drift_to_report(result, warning)
-        json_output.parent.mkdir(parents=True, exist_ok=True)
-        json_output.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
-        click.echo(f"JSONを書き出しました: {json_output}")
+        out_path = Path(json_output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+        click.echo(f"JSONを書き出しました: {out_path}")
 
     if strict and warning.severity in {"high", "critical"}:
         raise click.ClickException("strictモード: 高重大度のドリフトが検出されました。")
