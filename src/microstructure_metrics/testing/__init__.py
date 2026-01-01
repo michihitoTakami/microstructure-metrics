@@ -58,8 +58,10 @@ class RegressionCase:
     duration: float = 1.0
     sample_rate: int = 48_000
     rng_seed: int = 0
-    signal_kwargs: dict[str, object] = field(default_factory=dict)
-    degradation_kwargs: dict[str, object] = field(default_factory=dict)
+    signal_kwargs: dict[str, float | int | str | None] = field(default_factory=dict)
+    degradation_kwargs: dict[str, float | int | str | None] = field(
+        default_factory=dict
+    )
     description: str = ""
     metrics: tuple[str, ...] | None = None
 
@@ -157,8 +159,8 @@ def generate_degraded_pair(
     duration: float = 1.0,
     sample_rate: int = 48_000,
     rng_seed: int = 0,
-    signal_kwargs: Mapping[str, object] | None = None,
-    degradation_kwargs: Mapping[str, object] | None = None,
+    signal_kwargs: Mapping[str, float | int | str | None] | None = None,
+    degradation_kwargs: Mapping[str, float | int | str | None] | None = None,
 ) -> DegradedPair:
     """Generate reference/DUT pair with a known degradation pattern."""
     if degradation not in DEGRADATION_TYPES:
@@ -258,18 +260,30 @@ def _default_signal_for_degradation(degradation: str) -> str:
     return mapping.get(degradation, "pink-noise")
 
 
+def _coerce_float(value: object, default: float) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return float(default)
+    return float(default)
+
+
 def _build_base_signal(
     *,
     signal_type: str,
     common: CommonSignalConfig,
     rng_seed: int,
-    signal_kwargs: dict[str, object],
+    signal_kwargs: Mapping[str, float | int | str | None],
 ) -> SignalBuildResult:
+    clean_kwargs = dict(signal_kwargs)
     return build_signal(
         signal_type,
         common=common,
         rng=default_rng(rng_seed),
-        **signal_kwargs,
+        **clean_kwargs,  # type: ignore[arg-type]
     )
 
 
@@ -281,7 +295,7 @@ def _apply_degradation(
     severity: float,
     rng: Generator,
     metadata: Mapping[str, object],
-    degradation_kwargs: Mapping[str, object],
+    degradation_kwargs: Mapping[str, float | int | str | None],
 ) -> npt.NDArray[np.float64]:
     level = float(np.clip(severity, 0.0, 1.0))
     degrad = degradation.lower()
@@ -292,7 +306,7 @@ def _apply_degradation(
     if degrad == "soft_clipping":
         return _apply_soft_clipping(data, level=level)
     if degrad == "band_limit":
-        cutoff = float(degradation_kwargs.get("cutoff_hz", 10_000.0))
+        cutoff = _coerce_float(degradation_kwargs.get("cutoff_hz", 10_000.0), 10_000.0)
         return _apply_band_limit(data, sample_rate=sample_rate, cutoff_hz=cutoff)
     if degrad == "noise":
         return _apply_noise(data, level=level, rng=rng)
@@ -318,7 +332,7 @@ def _apply_harmonic_distortion(
     level: float,
     metadata: Mapping[str, object],
 ) -> npt.NDArray[np.float64]:
-    base_freq = float(metadata.get("tone_freq_hz", 1000.0))
+    base_freq = _coerce_float(metadata.get("tone_freq_hz", 1000.0), 1000.0)
     target_db = -70.0 + 20.0 * level  # ~-70 to -50 dB relative to carrier
     amp = 10 ** (target_db / 20.0)
     t = np.arange(data.shape[0]) / sample_rate
@@ -372,8 +386,8 @@ def _apply_notch_fill(
     metadata: Mapping[str, object],
     rng: Generator,
 ) -> npt.NDArray[np.float64]:
-    center = float(metadata.get("notch_center_hz", 8000.0))
-    q = float(metadata.get("notch_q", 8.6))
+    center = _coerce_float(metadata.get("notch_center_hz"), 8000.0)
+    q = _coerce_float(metadata.get("notch_q"), 8.6)
     nyquist = sample_rate / 2
     half_bw = center / max(q * 2, 1e-6)
     low = max(50.0, center - half_bw)
@@ -451,16 +465,20 @@ def evaluate_metrics(
     results: dict[str, float] = {}
 
     if {"thd_n_db", "sinad_db"} & requested:
-        fundamental = metadata.get("tone_freq_hz")
-        if fundamental is not None:
-            expected_level = metadata.get("tone_level_dbfs", -3.0)
+        fundamental_value = metadata.get("tone_freq_hz")
+        if fundamental_value is not None:
+            fundamental = _coerce_float(fundamental_value, 1000.0)
+            expected_level_value = metadata.get("tone_level_dbfs", -3.0)
+            expected_level = (
+                _coerce_float(expected_level_value, -3.0)
+                if expected_level_value is not None
+                else None
+            )
             thd = calculate_thd_n(
                 signal=dut,
-                fundamental_freq=float(fundamental),
+                fundamental_freq=fundamental,
                 sample_rate=sample_rate,
-                expected_level_dbfs=(
-                    float(expected_level) if expected_level is not None else None
-                ),
+                expected_level_dbfs=expected_level,
             )
             results["thd_n_db"] = thd.thd_n_db
             results["sinad_db"] = thd.sinad_db
@@ -470,8 +488,8 @@ def evaluate_metrics(
             reference=reference,
             dut=dut,
             sample_rate=sample_rate,
-            notch_center_hz=float(metadata.get("notch_center_hz", 8000.0)),
-            notch_q=float(metadata.get("notch_q", 8.6)),
+            notch_center_hz=_coerce_float(metadata.get("notch_center_hz"), 8000.0),
+            notch_q=_coerce_float(metadata.get("notch_q"), 8.6),
         )
         results["nps_db"] = nps.nps_db
         results["ref_notch_depth_db"] = nps.ref_notch_depth_db
