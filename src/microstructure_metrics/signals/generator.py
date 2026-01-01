@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import numpy as np
+import numpy.typing as npt
 from scipy import signal
 
 DEFAULT_VERSION = "1.0.0"
@@ -40,7 +41,7 @@ class CommonSignalConfig:
 
 @dataclass
 class SignalBuildResult:
-    data: np.ndarray
+    data: npt.NDArray[np.float64]
     metadata: dict[str, object]
     suggested_stem: str
 
@@ -97,7 +98,7 @@ def build_signal(
         body = _generate_sine(freq=tone_freq, sample_rate=sample_rate, samples=samples)
         body = _scale_to_dbfs(body, tone_level_dbfs, mode="peak")
         descriptor = f"{int(tone_freq)}hz"
-        extra_meta = {
+        extra_meta: dict[str, object] = {
             "tone_freq_hz": tone_freq,
             "tone_level_dbfs": tone_level_dbfs,
         }
@@ -186,8 +187,8 @@ def build_signal(
 
 
 def _compose_timeline(
-    body: np.ndarray, common: CommonSignalConfig
-) -> tuple[np.ndarray, float]:
+    body: npt.NDArray[np.float64], common: CommonSignalConfig
+) -> tuple[npt.NDArray[np.float64], float]:
     sr = common.sample_rate
     pilot = _generate_pilot(
         sample_rate=sr,
@@ -212,7 +213,7 @@ def _generate_pilot(
     duration_ms: int,
     level_dbfs: float,
     fade_ms: int,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     samples = max(int(sample_rate * duration_ms / 1000), 1)
     t = np.arange(samples) / sample_rate
     tone = np.sin(2 * np.pi * freq * t)
@@ -220,7 +221,9 @@ def _generate_pilot(
     return _scale_to_dbfs(tone, level_dbfs, mode="peak")
 
 
-def _generate_sine(*, freq: float, sample_rate: int, samples: int) -> np.ndarray:
+def _generate_sine(
+    *, freq: float, sample_rate: int, samples: int
+) -> npt.NDArray[np.float64]:
     t = np.arange(samples) / sample_rate
     return np.sin(2 * np.pi * freq * t)
 
@@ -234,7 +237,7 @@ def _generate_notched_noise(
     lowcut: float | None,
     highcut: float | None,
     rng: np.random.Generator,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     base = _generate_pink_noise(
         sample_rate=sample_rate,
         samples=samples,
@@ -259,7 +262,7 @@ def _generate_pink_noise(
     lowcut: float | None,
     highcut: float | None,
     rng: np.random.Generator,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     white = rng.standard_normal(samples)
     b = np.array(
         [0.049922035, -0.095993537, 0.050612699, -0.004408786], dtype=np.float64
@@ -284,7 +287,7 @@ def _generate_modulated(
     am_depth_ratio: float,
     fm_dev_hz: float,
     fm_freq_hz: float,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     t = np.arange(samples) / sample_rate
     am = 1.0 + am_depth_ratio * np.sin(2 * np.pi * am_freq_hz * t)
     beta = fm_dev_hz / max(fm_freq_hz, 1e-6)
@@ -301,7 +304,7 @@ def _generate_tfs_tones(
     min_freq_hz: float,
     tone_count: int,
     tone_step_hz: float,
-) -> tuple[np.ndarray, list[float]]:
+) -> tuple[npt.NDArray[np.float64], list[float]]:
     freqs = [min_freq_hz + i * tone_step_hz for i in range(tone_count)]
     nyquist = sample_rate / 2
     for f in freqs:
@@ -315,11 +318,11 @@ def _generate_tfs_tones(
 
 def _band_limit(
     *,
-    data: np.ndarray,
+    data: npt.NDArray[np.float64],
     sample_rate: int,
     lowcut: float | None,
     highcut: float | None,
-) -> np.ndarray:
+) -> npt.NDArray[np.float64]:
     nyquist = sample_rate / 2
     low = lowcut if lowcut not in (None, 0) else None
     high = highcut if highcut not in (None, 0) else None
@@ -329,6 +332,7 @@ def _band_limit(
     if low is None and high is None:
         return data
     if low is None:
+        assert high is not None
         sos = signal.butter(4, high / nyquist, btype="low", output="sos")
     elif high is None:
         sos = signal.butter(4, low / nyquist, btype="high", output="sos")
@@ -336,10 +340,12 @@ def _band_limit(
         sos = signal.butter(
             4, [low / nyquist, high / nyquist], btype="band", output="sos"
         )
-    return signal.sosfilt(sos, data)
+    return np.asarray(signal.sosfilt(sos, data), dtype=np.float64)
 
 
-def _apply_fade(data: np.ndarray, *, fade_samples: int) -> np.ndarray:
+def _apply_fade(
+    data: npt.NDArray[np.float64], *, fade_samples: int
+) -> npt.NDArray[np.float64]:
     if fade_samples <= 0:
         return data
     fade_samples = min(fade_samples, data.shape[0] // 2)
@@ -352,7 +358,9 @@ def _apply_fade(data: np.ndarray, *, fade_samples: int) -> np.ndarray:
     return out
 
 
-def _scale_to_dbfs(data: np.ndarray, target_dbfs: float, *, mode: str) -> np.ndarray:
+def _scale_to_dbfs(
+    data: npt.NDArray[np.float64], target_dbfs: float, *, mode: str
+) -> npt.NDArray[np.float64]:
     if data.size == 0:
         return data
     if mode not in {"peak", "rms"}:

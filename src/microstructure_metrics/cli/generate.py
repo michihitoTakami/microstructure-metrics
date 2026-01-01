@@ -151,7 +151,7 @@ from microstructure_metrics.signals import (
 @click.option(
     "--output",
     "-o",
-    type=click.Path(path_type=Path),
+    type=click.Path(),
     help="出力WAVパス（未指定なら仕様に沿ったファイル名を生成）",
 )
 @click.option(
@@ -182,7 +182,7 @@ def generate(
     min_freq: float,
     tone_count: int,
     tone_step: float,
-    output: Path | None,
+    output: str | None,
     with_metadata: bool,
 ) -> None:
     """テスト信号を生成してWAV/JSONを書き出す."""
@@ -214,7 +214,7 @@ def generate(
         tone_step=tone_step,
     )
 
-    wav_path = output or Path(f"{result.suggested_stem}.wav")
+    wav_path = Path(output) if output else Path(f"{result.suggested_stem}.wav")
     wav_path.parent.mkdir(parents=True, exist_ok=True)
 
     sf.write(
