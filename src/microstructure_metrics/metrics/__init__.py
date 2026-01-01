@@ -15,6 +15,12 @@ from microstructure_metrics.metrics.spectral_entropy import (
     plot_delta_se,
     plot_spectral_entropy,
 )
+from microstructure_metrics.metrics.tfs import (
+    TFSComponents,
+    TFSCorrelationResult,
+    calculate_tfs_correlation,
+    extract_tfs,
+)
 from microstructure_metrics.metrics.thd_n import THDNResult, calculate_thd_n
 
 __all__ = [
@@ -32,4 +38,8 @@ __all__ = [
     "calculate_delta_se",
     "plot_spectral_entropy",
     "plot_delta_se",
+    "TFSComponents",
+    "TFSCorrelationResult",
+    "extract_tfs",
+    "calculate_tfs_correlation",
 ]
