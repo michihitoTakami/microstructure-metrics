@@ -1,119 +1,96 @@
 # Microstructure Metrics
 
-人間知覚指向DAC/AMPマイクロダイナミクス評価系
+Human-perception-oriented DAC/AMP microdynamics evaluation suite.
 
-## 概要
+## Overview
 
-SINADやTHD+Nといった従来の定常状態指標と並立し、人間の聴覚情報処理により適合した**マイクロダイナミクス評価指標群**をオフラインで計算するパイプラインを提供します。
+This project provides an offline pipeline to compute **microdynamics metrics** that better align with human auditory perception, alongside conventional steady-state metrics such as SINAD and THD+N.
 
-### 背景
+### Background
 
-現代のDAC/AMPは120dB以上のSINADを容易に達成しますが、定常状態の測定だけでは「音楽性」や「マイクロダイナミクス」——微細な過渡応答、空間情報の再現性、音色のテクスチャ——における聴感上の差異を説明できません。
+Modern DAC/AMP devices easily achieve SINAD > 120 dB, yet steady-state measurements alone cannot explain perceived differences in “musicality” or microdynamics—fine transient behavior, spatial reproduction, and timbral texture. We implement new metrics based on these hypotheses:
+- Strong negative feedback (NFB) may smooth transient microstructures.
+- Spectral notches/peaks may be lost, causing information deficits.
+- Temporal fine structure (TFS) phase coherence may degrade at high frequencies.
 
-本プロジェクトでは、以下の仮説に基づく新指標群を実装します：
-- 強力なNFB（負帰還）が過渡的な微細構造を平滑化している可能性
-- スペクトルの凹凸（ノッチやピーク）の情報欠損が発生している可能性
-- 時間微細構造（TFS）の位相コヒーレンスが劣化している可能性
+### Metrics to be implemented
 
-### 実装する指標
+| Metric | Abbr. | Target |
+|--------|-------|--------|
+| THD+N | THD+N | Baseline check (gain, distortion) |
+| Notch Preservation Score | NPS | Spectral pollution from dynamic IMD |
+| Spectral Entropy Delta | ΔSE | Flattening / information loss of structure |
+| Modulation Power Spectrum | MPS | Preservation of texture / modulation info |
+| Temporal Fine Structure Correlation | TFS | High-frequency phase coherence |
 
-| 指標 | 略称 | 評価対象 |
-|------|------|----------|
-| THD+N | THD+N | 従来指標（ベースライン・ゲイン適正確認） |
-| ノッチ保存度 | NPS | 動的IMDによるスペクトル汚染 |
-| スペクトルエントロピー差分 | ΔSE | 信号構造の平坦化・情報喪失 |
-| 変調パワースペクトラム | MPS | テクスチャ・変調情報の保持 |
-| 時間微細構造相関 | TFS | 高域位相コヒーレンス |
+## Requirements
 
-## 動作要件
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) package manager
 
-- Python 3.13 以上
-- [uv](https://github.com/astral-sh/uv) パッケージマネージャ
-
-## インストール
-
-### uv を使用（推奨）
+## Installation (via uv)
 
 ```bash
-# リポジトリをクローン
 git clone https://github.com/michihitoTakami/microstructure-metrics.git
 cd microstructure-metrics
-
-# 依存関係をインストール
 uv sync
 ```
 
-### pip を使用
+## Quickstart
 
 ```bash
-pip install .
-```
-
-## クイックスタート
-
-```bash
-# CLIのヘルプを表示
+# Show CLI help
 uv run microstructure-metrics --help
 
-# バージョン確認
+# Check version
 uv run microstructure-metrics --version
 ```
 
-## 開発者向けセットアップ
-
-### 開発環境のセットアップ
+## Development setup
 
 ```bash
-# リポジトリをクローン
 git clone https://github.com/michihitoTakami/microstructure-metrics.git
 cd microstructure-metrics
 
-# 開発用依存を含めてインストール
+# Install with dev extras
 uv sync --extra dev
 
-# pre-commitフックをインストール
+# Install hooks
 uv run pre-commit install
 uv run pre-commit install --hook-type pre-push
 ```
 
-### コード品質チェック
+### Quality checks
 
 ```bash
-# Linter/Formatter実行
 uv run ruff check src/
 uv run ruff format src/
-
-# 型チェック
 uv run mypy src/
-
-# テスト実行
 uv run pytest
-
-# pre-commitを全ファイルに実行
 uv run pre-commit run --all-files
 ```
 
-## プロジェクト構造
+## Project layout
 
 ```
 microstructure-metrics/
-├── docs/                          # ドキュメント
+├── docs/                          # Documentation
 ├── src/
-│   └── microstructure_metrics/    # メインパッケージ
+│   └── microstructure_metrics/    # Main package
 │       ├── __init__.py
-│       ├── cli.py                 # CLIエントリポイント
-│       └── py.typed               # PEP 561 型マーカー
-├── tests/                         # テスト
-├── .pre-commit-config.yaml        # pre-commit設定
-├── pyproject.toml                 # プロジェクト設定
+│       ├── cli.py                 # CLI entrypoint
+│       └── py.typed               # PEP 561 marker
+├── tests/                         # Tests
+├── .pre-commit-config.yaml        # pre-commit settings
+├── pyproject.toml                 # Project config
 └── README.md
 ```
 
-## 参考資料
+## References
 
 - `docs/DAC_AMP評価指標 再実装指示.pdf`
 - `docs/ミクロダイナミクス評価の新指標.pdf`
 
-## ライセンス
+## License
 
 MIT License
