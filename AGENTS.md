@@ -88,3 +88,4 @@ uv run pre-commit run --all-files
 - 作業時はユーザー指示がない限り **worktree** を使用する
 - worktree名は `mm-<ISSUE番号>` （例: `mm-13`）
 - worktree作成時は必ず最新の `origin/main` から分岐する
+- PR作成は GitHub CLI で実行すること（本タスクはAIエージェントが gh コマンドで対応）
