@@ -250,7 +250,7 @@ def _generate_notched_noise(
         raise ValueError("Notch Q must be positive.")
     if not 0 < center_hz < nyquist:
         raise ValueError("Notch center must be within (0, Nyquist)")
-    b, a = signal.iirnotch(w0=center_hz / nyquist, q=q)
+    b, a = signal.iirnotch(w0=center_hz / nyquist, Q=q)
     filtered = signal.lfilter(b, a, base)
     return _scale_to_dbfs(filtered, -14.0, mode="rms")
 
