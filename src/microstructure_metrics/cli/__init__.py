@@ -8,6 +8,7 @@ from microstructure_metrics import __version__
 from microstructure_metrics.cli.align import align
 from microstructure_metrics.cli.drift import drift
 from microstructure_metrics.cli.generate import generate
+from microstructure_metrics.cli.report import report
 
 
 @click.group()
@@ -22,6 +23,7 @@ def main() -> None:
 main.add_command(generate)
 main.add_command(align)
 main.add_command(drift)
+main.add_command(report)
 
 
 if __name__ == "__main__":
