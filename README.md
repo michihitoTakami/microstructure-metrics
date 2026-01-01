@@ -44,6 +44,9 @@ uv run microstructure-metrics --help
 
 # Check version
 uv run microstructure-metrics --version
+
+# Align recorded WAVs (ref/dut) using pilot tones
+uv run microstructure-metrics align ref.wav dut.wav
 ```
 
 ## Development setup
@@ -90,6 +93,7 @@ microstructure-metrics/
 
 - `docs/DAC_AMP評価指標 再実装指示.pdf`
 - `docs/ミクロダイナミクス評価の新指標.pdf`
+- `docs/alignment.md`
 
 ## License
 
