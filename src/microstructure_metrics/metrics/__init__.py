@@ -6,6 +6,8 @@ from microstructure_metrics.metrics.spectral_entropy import (
     SpectralEntropyResult,
     calculate_delta_se,
     calculate_spectral_entropy,
+    plot_delta_se,
+    plot_spectral_entropy,
 )
 from microstructure_metrics.metrics.thd_n import THDNResult, calculate_thd_n
 
@@ -18,4 +20,6 @@ __all__ = [
     "DeltaSEResult",
     "calculate_spectral_entropy",
     "calculate_delta_se",
+    "plot_spectral_entropy",
+    "plot_delta_se",
 ]

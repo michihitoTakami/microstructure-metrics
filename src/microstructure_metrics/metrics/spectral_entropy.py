@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 from scipy import signal as sp_signal
 
 EPS = 1e-12
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,8 @@ class DeltaSEResult:
     dut_se_mean: float
     delta_se_over_time: npt.NDArray[np.float64]
     frame_times: npt.NDArray[np.float64]
+    ref_entropy_over_time: npt.NDArray[np.float64]
+    dut_entropy_over_time: npt.NDArray[np.float64]
 
 
 def calculate_spectral_entropy(
@@ -179,4 +185,92 @@ def calculate_delta_se(
         dut_se_mean=dut_result.mean_entropy,
         delta_se_over_time=np.asarray(delta, dtype=np.float64),
         frame_times=ref_result.frame_times,
+        ref_entropy_over_time=ref_entropy,
+        dut_entropy_over_time=dut_entropy,
     )
+
+
+def plot_spectral_entropy(
+    result: SpectralEntropyResult,
+    *,
+    ax: Axes | None = None,
+    label: str | None = None,
+    title: str | None = None,
+) -> Axes:
+    """スペクトルエントロピーの時系列を描画する。
+
+    Args:
+        result: calculate_spectral_entropy の結果。
+        ax: 描画先Axes。Noneなら新規作成。
+        label: 凡例用ラベル。
+        title: グラフタイトル。
+
+    Returns:
+        生成または利用した Axes。
+    """
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    ax.plot(result.frame_times, result.entropy_over_time, label=label or "SE")
+    ax.set_xlabel("Time [s]")
+    ylabel = "Spectral entropy"
+    if result.normalized:
+        ylabel += " (normalized)"
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    if label:
+        ax.legend()
+    return ax
+
+
+def plot_delta_se(
+    result: DeltaSEResult,
+    *,
+    ax: Axes | None = None,
+    histogram_ax: Axes | None = None,
+    bins: int = 40,
+    title: str | None = None,
+) -> tuple[Axes, Axes]:
+    """ΔSEと入出力エントロピーの時系列＋ヒストグラムを描画する。
+
+    Args:
+        result: calculate_delta_se の結果。
+        ax: 時系列描画先。Noneなら新規作成。
+        histogram_ax: ヒストグラム描画先。Noneなら新規作成。
+        bins: ヒストグラムのビン数。
+        title: 時系列グラフのタイトル。
+
+    Returns:
+        (time_series_ax, histogram_ax)
+    """
+    import matplotlib.pyplot as plt
+
+    if ax is None:
+        _, ax = plt.subplots()
+    if histogram_ax is None:
+        _, histogram_ax = plt.subplots()
+
+    ax.plot(
+        result.frame_times,
+        result.ref_entropy_over_time,
+        label="Reference SE",
+        linestyle="--",
+    )
+    ax.plot(
+        result.frame_times, result.dut_entropy_over_time, label="DUT SE", linestyle=":"
+    )
+    ax.plot(result.frame_times, result.delta_se_over_time, label="ΔSE", color="C3")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Spectral entropy")
+    if title:
+        ax.set_title(title)
+    ax.legend()
+
+    histogram_ax.hist(result.delta_se_over_time, bins=bins, color="C3", alpha=0.8)
+    histogram_ax.set_xlabel("ΔSE")
+    histogram_ax.set_ylabel("Count")
+
+    return ax, histogram_ax

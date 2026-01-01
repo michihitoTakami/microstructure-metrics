@@ -105,6 +105,7 @@ module = [
     "gammatone.*",
     "soundfile.*",
     "scipy.*",
+    "matplotlib.*",
 ]
 ignore_missing_imports = true
 
