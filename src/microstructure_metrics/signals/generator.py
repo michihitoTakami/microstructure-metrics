@@ -373,7 +373,7 @@ def _scale_to_dbfs(
         return data
     target = _dbfs_to_amplitude(target_dbfs)
     scaled = data * (target / reference)
-    return scaled
+    return np.asarray(scaled, dtype=np.float64)
 
 
 def _dbfs_to_amplitude(dbfs: float) -> float:
