@@ -47,6 +47,10 @@ uv run microstructure-metrics --version
 
 # Align recorded WAVs (ref/dut) using pilot tones
 uv run microstructure-metrics align ref.wav dut.wav
+
+# Run integrated report (align + all metrics)
+uv run microstructure-metrics report ref.wav dut.wav \
+  --output-json metrics_report.json
 ```
 
 ## Development setup
