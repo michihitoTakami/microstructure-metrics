@@ -62,3 +62,63 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert "thd_n" in csv_body
     assert md_path.exists()
     assert "Microstructure Metrics Report" in md_path.read_text()
+
+
+def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:
+    # ref: 48k, dut: 44.1k -> allow_resample により自動で合わせる
+    ref_common = CommonSignalConfig(sample_rate=48_000, duration=0.3)
+    dut_common = CommonSignalConfig(sample_rate=44_100, duration=0.3)
+    ref = build_signal("thd", common=ref_common).data
+    dut = build_signal("thd", common=dut_common).data
+
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, ref, samplerate=ref_common.sample_rate)
+    sf.write(dut_path, dut, samplerate=dut_common.sample_rate)
+
+    json_path = tmp_path / "report_no_align.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "report",
+            str(ref_path),
+            str(dut_path),
+            "--no-align",
+            "--allow-resample",
+            "--output-json",
+            str(json_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(json_path.read_text())
+    # no-align でも metrics が生成され、alignment は delay 0 のダミー
+    assert payload["alignment"]["delay_samples"] == 0.0
+    assert payload["metrics"]["thd_n"]
+
+
+def test_cli_report_fails_without_resample_permission(tmp_path: Path) -> None:
+    # SR が異なるのに --allow-resample を指定しない場合はエラーになる
+    ref_common = CommonSignalConfig(sample_rate=48_000, duration=0.2)
+    dut_common = CommonSignalConfig(sample_rate=44_100, duration=0.2)
+    ref = build_signal("thd", common=ref_common).data
+    dut = build_signal("thd", common=dut_common).data
+
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, ref, samplerate=ref_common.sample_rate)
+    sf.write(dut_path, dut, samplerate=dut_common.sample_rate)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "report",
+            str(ref_path),
+            str(dut_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Sample rate mismatch" in result.output
