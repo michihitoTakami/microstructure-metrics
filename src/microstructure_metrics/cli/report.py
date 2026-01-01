@@ -4,7 +4,7 @@ import csv
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import click
 
@@ -399,16 +399,16 @@ def _calculate_metrics(
         reference=aligned_ref,
         dut=aligned_dut,
         sample_rate=sample_rate,
-        filterbank=mps_filterbank,
+        filterbank=cast(Literal["gammatone", "mel"], mps_filterbank),
         filterbank_kwargs=mps_filterbank_kwargs,
-        envelope_method=mps_envelope_method,
+        envelope_method=cast(Literal["hilbert", "rectify"], mps_envelope_method),
         envelope_lowpass_hz=mps_envelope_lpf_hz,
         envelope_lowpass_order=mps_envelope_lpf_order,
-        mod_scale=mps_mod_scale,
+        mod_scale=cast(Literal["linear", "log"], mps_mod_scale),
         num_mod_bins=mps_num_mod_bins,
-        mps_scale=mps_scale,
-        mps_norm=mps_norm,
-        band_weighting=mps_band_weighting,
+        mps_scale=cast(Literal["power", "log"], mps_scale),
+        mps_norm=cast(Literal["global", "per_band", "none"], mps_norm),
+        band_weighting=cast(Literal["none", "energy"], mps_band_weighting),
     )
     tfs = calculate_tfs_correlation(
         reference=aligned_ref,

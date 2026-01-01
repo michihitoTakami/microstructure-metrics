@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final, Literal, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -107,21 +107,39 @@ def calculate_mps(
 
     high_limit = min(audio_high, nyquist * 0.99)
     fb_kwargs = dict(filterbank_kwargs or {})
+    fb: GammatoneFilterbank | MelFilterbank
     if filterbank == "gammatone":
+        width = (
+            float(fb_kwargs["width"])
+            if "width" in fb_kwargs and fb_kwargs["width"] is not None
+            else 1.0
+        )
         fb = GammatoneFilterbank(
             sample_rate=sample_rate,
             num_filters=num_audio_bands,
             low_freq=audio_low,
             high_freq=high_limit,
-            **_select_kwargs(fb_kwargs, {"width"}),
+            width=width,
         )
     else:
+        mel_order = (
+            int(fb_kwargs["order"])
+            if "order" in fb_kwargs and fb_kwargs["order"] is not None
+            else 4
+        )
+        mel_bandwidth = (
+            float(fb_kwargs["bandwidth_scale"])
+            if "bandwidth_scale" in fb_kwargs
+            and fb_kwargs["bandwidth_scale"] is not None
+            else 1.0
+        )
         fb = MelFilterbank(
             sample_rate=sample_rate,
             num_filters=num_audio_bands,
             low_freq=audio_low,
             high_freq=high_limit,
-            **_select_kwargs(fb_kwargs, {"order", "bandwidth_scale"}),
+            order=mel_order,
+            bandwidth_scale=mel_bandwidth,
         )
     band_signals = fb.analyze(data)
 
@@ -270,9 +288,13 @@ def _extract_envelopes(
     remove_dc: bool,
 ) -> npt.NDArray[np.float64]:
     if method == "hilbert":
-        envelopes = np.abs(sp_signal.hilbert(band_signals, axis=1))
+        envelope_raw = np.abs(sp_signal.hilbert(band_signals, axis=1))
     else:
-        envelopes = np.abs(band_signals)
+        envelope_raw = np.abs(band_signals)
+
+    envelopes: npt.NDArray[np.float64] = cast(
+        npt.NDArray[np.float64], np.asarray(envelope_raw, dtype=np.float64)
+    )
 
     envelopes = _apply_lowpass(
         envelopes,
@@ -294,12 +316,12 @@ def _apply_lowpass(
     order: int,
 ) -> npt.NDArray[np.float64]:
     if cutoff_hz is None:
-        return data
+        return np.asarray(data, dtype=np.float64)
     nyquist = sample_rate / 2
     if cutoff_hz <= 0 or cutoff_hz >= nyquist:
         raise ValueError("envelope_lowpass_hz must be in (0, Nyquist)")
     sos = sp_signal.butter(order, cutoff_hz, btype="low", fs=sample_rate, output="sos")
-    return sp_signal.sosfiltfilt(sos, data, axis=1)
+    return np.asarray(sp_signal.sosfiltfilt(sos, data, axis=1), dtype=np.float64)
 
 
 def _interpolate_mod_axis(
@@ -311,11 +333,13 @@ def _interpolate_mod_axis(
     if source_freqs.ndim != 1 or target_freqs.ndim != 1:
         raise ValueError("frequency axes must be 1-D")
     if source_freqs.size < 2:
-        return matrix
+        return np.asarray(matrix, dtype=np.float64)
     interpolated = np.zeros((matrix.shape[0], target_freqs.size), dtype=np.float64)
     for idx, row in enumerate(matrix):
-        interpolated[idx] = np.interp(target_freqs, source_freqs, row)
-    return interpolated
+        interpolated[idx] = np.asarray(
+            np.interp(target_freqs, source_freqs, row), dtype=np.float64
+        )
+    return np.asarray(interpolated, dtype=np.float64)
 
 
 def _power_to_db(matrix: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -394,9 +418,3 @@ def _pearson(a: npt.NDArray[np.float64], b: npt.NDArray[np.float64]) -> float:
     if denom <= 0 or not np.isfinite(denom):
         return 0.0
     return float(np.sum(a_dev * b_dev) / denom)
-
-
-def _select_kwargs(
-    source: Mapping[str, float | int | None], allowed: set[str]
-) -> dict[str, float | int | None]:
-    return {key: value for key, value in source.items() if key in allowed}

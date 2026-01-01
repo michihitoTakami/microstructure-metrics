@@ -10,16 +10,18 @@ from scipy import signal as sp_signal
 EPS: Final = 1e-12
 
 
-def _hz_to_mel(freq_hz: float) -> float:
+def _hz_to_mel(freq_hz: npt.ArrayLike) -> npt.NDArray[np.float64]:
     """HTK-style Hz→mel変換。"""
 
-    return 2595.0 * np.log10(1.0 + freq_hz / 700.0)
+    hz = np.asarray(freq_hz, dtype=np.float64)
+    return 2595.0 * np.log10(1.0 + hz / 700.0)
 
 
-def _mel_to_hz(mel: float) -> float:
+def _mel_to_hz(mel: npt.ArrayLike) -> npt.NDArray[np.float64]:
     """HTK-style mel→Hz変換。"""
 
-    return 700.0 * (10 ** (mel / 2595.0) - 1.0)
+    m = np.asarray(mel, dtype=np.float64)
+    return 700.0 * (10 ** (m / 2595.0) - 1.0)
 
 
 @dataclass
@@ -51,8 +53,8 @@ class MelFilterbank:
         if self.bandwidth_scale <= 0:
             raise ValueError("bandwidth_scale must be positive")
 
-        mel_low = _hz_to_mel(self.low_freq)
-        mel_high = _hz_to_mel(high)
+        mel_low = float(_hz_to_mel(self.low_freq))
+        mel_high = float(_hz_to_mel(high))
         mel_points = np.linspace(mel_low, mel_high, self.num_filters)
         centers = _mel_to_hz(mel_points)
 
