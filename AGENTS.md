@@ -85,3 +85,6 @@ uv run pre-commit run --all-files
 - オーディオファイル（.wav等）はリポジトリに含めない（.gitignoreで除外済み）
 - テスト用フィクスチャは `tests/fixtures/` に配置
 - 大きなファイル（1MB以上）のコミットは避ける
+- 作業時はユーザー指示がない限り **worktree** を使用する
+- worktree名は `mm-<ISSUE番号>` （例: `mm-13`）
+- worktree作成時は必ず最新の `origin/main` から分岐する
