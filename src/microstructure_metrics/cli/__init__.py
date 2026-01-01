@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from microstructure_metrics import __version__
+from microstructure_metrics.cli.align import align
 from microstructure_metrics.cli.generate import generate
 
 
@@ -18,6 +19,7 @@ def main() -> None:
 
 # サブコマンド登録
 main.add_command(generate)
+main.add_command(align)
 
 
 if __name__ == "__main__":
