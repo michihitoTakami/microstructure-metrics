@@ -180,9 +180,10 @@ def _extract_band(
 
 
 def _bandpass(*, low: float, high: float, sample_rate: int, order: int) -> npt.NDArray:
-    return sp_signal.butter(
+    sos = sp_signal.butter(
         order, [low, high], btype="bandpass", fs=sample_rate, output="sos"
     )
+    return np.asarray(sos, dtype=np.float64)
 
 
 def _normalized_correlation(
@@ -202,4 +203,4 @@ def _normalized_correlation(
 def _wrap_phase(phase_diff: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Wrap phase difference to [-pi, pi] range."""
 
-    return np.angle(np.exp(1j * phase_diff))
+    return np.asarray(np.angle(np.exp(1j * phase_diff)), dtype=np.float64)
