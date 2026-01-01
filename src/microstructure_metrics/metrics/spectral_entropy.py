@@ -83,8 +83,8 @@ def calculate_spectral_entropy(
         if high > nyquist:
             raise ValueError("freq_range high must be below Nyquist")
 
-    if noise_floor_db is not None and noise_floor_db <= 0:
-        raise ValueError("noise_floor_db must be positive when specified")
+    if noise_floor_db is not None and noise_floor_db < 0:
+        raise ValueError("noise_floor_db must be non-negative when specified")
 
     freqs, times, stft_matrix = sp_signal.stft(
         data,
