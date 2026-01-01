@@ -126,9 +126,13 @@ DEFAULT_JSON = "metrics_report.json"
 )
 @click.option(
     "--expected-level-dbfs",
-    default=-3.0,
-    show_default=True,
-    help="THD+N の想定ピークレベル (dBFS)",
+    type=float,
+    default=None,
+    show_default=False,
+    help=(
+        "THD+N の想定ピークレベル (dBFS)。"
+        "指定すると、基本波レベルが許容範囲から外れた場合に警告を出す。"
+    ),
 )
 @click.option(
     "--notch-center-hz",
@@ -234,7 +238,7 @@ def report(
     margin_ms: float,
     max_lag_ms: float,
     fundamental_freq: float,
-    expected_level_dbfs: float,
+    expected_level_dbfs: float | None,
     notch_center_hz: float,
     notch_q: float,
     mps_filterbank: str,
@@ -362,7 +366,7 @@ def _calculate_metrics(
     aligned_dut: Any,
     sample_rate: int,
     fundamental_freq: float,
-    expected_level_dbfs: float,
+    expected_level_dbfs: float | None,
     notch_center_hz: float,
     notch_q: float,
     mps_filterbank: str,
