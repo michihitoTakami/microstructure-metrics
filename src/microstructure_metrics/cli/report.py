@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -422,8 +423,12 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
         lines.append(f"- Validation errors: {len(errors)}")
     lines.append("")
 
-    metrics = report_payload.get("metrics", {})
-    for metric_name, metric_values in metrics.items():
+    metrics_obj = report_payload.get("metrics", {})
+    if not isinstance(metrics_obj, dict):
+        metrics_obj = {}
+    for metric_name, metric_values in metrics_obj.items():
+        if not isinstance(metric_values, dict):
+            continue
         lines.append(f"## {metric_name.upper()}")
         lines.append("")
         lines.append("| key | value |")
@@ -436,7 +441,7 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
 
 
 def _flatten_metric(
-    metric_name: str, values: dict[str, object]
+    metric_name: str, values: Mapping[str, object]
 ) -> list[tuple[str, str, object]]:
     flattened: list[tuple[str, str, object]] = []
     for key, value in values.items():
