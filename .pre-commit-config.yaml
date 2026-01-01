@@ -31,3 +31,12 @@ repos:
         args: [--config-file=pyproject.toml]
         pass_filenames: false
         entry: mypy src/
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
