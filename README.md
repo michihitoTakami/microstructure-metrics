@@ -1,27 +1,24 @@
 # Microstructure Metrics
 
 Human-perception-oriented DAC/AMP microdynamics evaluation suite.
+Provides offline alignment, drift estimation, signal generation, and five metrics (THD+N / NPS / ΔSE / MPS / TFS) in one pipeline. (EPIC: [issue #1](https://github.com/michihitoTakami/microstructure-metrics/issues/1))
 
-## Overview
+## Why this project
 
-This project provides an offline pipeline to compute **microdynamics metrics** that better align with human auditory perception, alongside conventional steady-state metrics such as SINAD and THD+N.
+Modern DAC/AMPs often exceed 120 dB SINAD, yet steady-state metrics alone cannot explain perceived differences in “microdynamics” (transients, texture, spatial cues). This toolkit targets micro-structure degradations under these hypotheses:
+- Strong NFB may over-smooth transients.
+- Spectral notches/peaks can be filled by dynamic IMD, losing information.
+- Temporal fine structure (TFS) phase coherence may break at high bands, harming localization.
 
-### Background
+## Metrics implemented
 
-Modern DAC/AMP devices easily achieve SINAD > 120 dB, yet steady-state measurements alone cannot explain perceived differences in “musicality” or microdynamics—fine transient behavior, spatial reproduction, and timbral texture. We implement new metrics based on these hypotheses:
-- Strong negative feedback (NFB) may smooth transient microstructures.
-- Spectral notches/peaks may be lost, causing information deficits.
-- Temporal fine structure (TFS) phase coherence may degrade at high frequencies.
-
-### Metrics to be implemented
-
-| Metric | Abbr. | Target |
-|--------|-------|--------|
-| THD+N | THD+N | Baseline check (gain, distortion) |
-| Notch Preservation Score | NPS | Spectral pollution from dynamic IMD |
-| Spectral Entropy Delta | ΔSE | Flattening / information loss of structure |
-| Modulation Power Spectrum | MPS | Preservation of texture / modulation info |
-| Temporal Fine Structure Correlation | TFS | High-frequency phase coherence |
+| Metric | Purpose |
+| --- | --- |
+| THD+N | Baseline gain/distortion health |
+| Notch Preservation Score (NPS) | Notch depth preservation vs noise/IMD pollution |
+| Spectral Entropy ΔSE | Information loss / spectral flattening |
+| Modulation Power Spectrum (MPS) | Texture preservation (correlation/distance) |
+| Temporal Fine Structure (TFS) | High-band phase coherence & group-delay stability |
 
 ### MPS options (S-09)
 - Log-scale modulation grid (`mod_scale="log"`, `num_mod_bins`).
@@ -34,7 +31,7 @@ Modern DAC/AMP devices easily achieve SINAD > 120 dB, yet steady-state measureme
 - Python 3.13+
 - [uv](https://github.com/astral-sh/uv) package manager
 
-## Installation (via uv)
+## Installation
 
 ```bash
 git clone https://github.com/michihitoTakami/microstructure-metrics.git
@@ -45,30 +42,40 @@ uv sync
 ## Quickstart
 
 ```bash
-# Show CLI help
+# Version / help
+uv run microstructure-metrics --version
 uv run microstructure-metrics --help
 
-# Check version
-uv run microstructure-metrics --version
+# Generate test signal (example: notched noise + metadata)
+uv run microstructure-metrics generate notched-noise --with-metadata
 
-# Align recorded WAVs (ref/dut) using pilot tones
+# Align ref/dut WAVs using pilot tones
 uv run microstructure-metrics align ref.wav dut.wav
 
-# Run integrated report (align + all metrics)
-uv run microstructure-metrics report ref.wav dut.wav \
-  --output-json metrics_report.json
+# Estimate drift and emit warnings (optionally JSON)
+uv run microstructure-metrics drift ref.aligned_ref.wav dut.aligned_dut.wav
+
+# Compute all metrics and export JSON/CSV/Markdown
+uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
+  --output-json report.json --output-md report.md
 ```
+
+## Documentation
+
+- User Guide (EN): `docs/en/user-guide.md`
+- Japanese overview: `README_JP.md`
+- Measurement setup: `docs/en/measurement-setup.md` (EN), `docs/jp/measurement-setup.md` (JP)
+- Signal specifications: `docs/en/signal-specifications.md` (EN), `docs/jp/signal-specifications.md` (JP)
+- Metrics interpretation: `docs/en/metrics-interpretation.md` (EN), `docs/jp/metrics-interpretation.md` (JP)
+- CLI/API reference (JP): `docs/jp/api-cli-reference.md`
+- Alignment details (JP): `docs/jp/alignment.md`
 
 ## Development setup
 
 ```bash
 git clone https://github.com/michihitoTakami/microstructure-metrics.git
 cd microstructure-metrics
-
-# Install with dev extras
 uv sync --extra dev
-
-# Install hooks
 uv run pre-commit install
 uv run pre-commit install --hook-type pre-push
 ```
@@ -87,23 +94,13 @@ uv run pre-commit run --all-files
 
 ```
 microstructure-metrics/
-├── docs/                          # Documentation
-├── src/
-│   └── microstructure_metrics/    # Main package
-│       ├── __init__.py
-│       ├── cli.py                 # CLI entrypoint
-│       └── py.typed               # PEP 561 marker
-├── tests/                         # Tests
-├── .pre-commit-config.yaml        # pre-commit settings
-├── pyproject.toml                 # Project config
+├── docs/                          # Specifications & guides
+├── src/microstructure_metrics/    # Package
+├── tests/                         # Unit/regression tests
+├── .pre-commit-config.yaml
+├── pyproject.toml
 └── README.md
 ```
-
-## References
-
-- `docs/DAC_AMP評価指標 再実装指示.pdf`
-- `docs/ミクロダイナミクス評価の新指標.pdf`
-- `docs/alignment.md`
 
 ## License
 
