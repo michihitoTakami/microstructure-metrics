@@ -70,13 +70,25 @@ def calculate_nps(
     ref_powers = fb.band_powers(ref)
     dut_powers = fb.band_powers(du)
 
-    notch_idx = int(np.argmin(np.abs(centers - notch_center_hz)))
-    adj_indices = _adjacent_indices(notch_idx, ref_powers.shape[0], span=adjacent_span)
+    notch_half_bw = notch_center_hz / (2 * notch_q)
+    notch_mask = np.abs(centers - notch_center_hz) <= notch_half_bw
+    if not np.any(notch_mask):
+        nearest = int(np.argmin(np.abs(centers - notch_center_hz)))
+        notch_mask[nearest] = True
+    notch_indices = np.nonzero(notch_mask)[0]
+    anchor_idx = int(np.argmin(np.abs(centers - notch_center_hz)))
+
+    adj_indices = _collect_adjacent_indices(
+        anchor_idx=anchor_idx,
+        length=ref_powers.shape[0],
+        span=adjacent_span,
+        exclude_mask=notch_mask,
+    )
     if not adj_indices:
         raise ValueError("notch is too close to band edges for adjacent measurement")
 
-    ref_notch_power = float(ref_powers[notch_idx])
-    dut_notch_power = float(dut_powers[notch_idx])
+    ref_notch_power = float(np.mean(ref_powers[notch_indices]))
+    dut_notch_power = float(np.mean(dut_powers[notch_indices]))
     ref_adjacent_power = float(np.mean(ref_powers[adj_indices]))
     dut_adjacent_power = float(np.mean(dut_powers[adj_indices]))
 
@@ -107,12 +119,25 @@ def calculate_nps(
     )
 
 
-def _adjacent_indices(center: int, length: int, *, span: int) -> list[int]:
+def _collect_adjacent_indices(
+    *,
+    anchor_idx: int,
+    length: int,
+    span: int,
+    exclude_mask: npt.NDArray[np.bool_],
+) -> list[int]:
     indices: list[int] = []
-    for offset in range(1, span + 1):
-        for candidate in (center - offset, center + offset):
-            if 0 <= candidate < length:
+    offset = 1
+    target_count = span * 2
+    while len(indices) < target_count and (
+        anchor_idx - offset >= 0 or anchor_idx + offset < length
+    ):
+        for candidate in (anchor_idx - offset, anchor_idx + offset):
+            if 0 <= candidate < length and not bool(exclude_mask[candidate]):
                 indices.append(candidate)
+                if len(indices) >= target_count:
+                    break
+        offset += 1
     return indices
 
 
