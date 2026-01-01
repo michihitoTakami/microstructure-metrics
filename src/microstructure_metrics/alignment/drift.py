@@ -43,6 +43,22 @@ class DriftWarning:
     message: str
 
 
+def drift_to_report(result: DriftEstimate, warning: DriftWarning) -> dict[str, object]:
+    """レポート/JSON出力向けの辞書へ変換する."""
+    return {
+        "drift_ppm": result.drift_ppm,
+        "drift_samples_per_second": result.drift_samples_per_second,
+        "delay_start_samples": result.delay_start_samples,
+        "delay_end_samples": result.delay_end_samples,
+        "severity": warning.severity,
+        "message": warning.message,
+        "pilot_confidence": {
+            "start": result.pilot_detection.start_confidence,
+            "end": result.pilot_detection.end_confidence,
+        },
+    }
+
+
 def estimate_clock_drift(
     *,
     reference: npt.NDArray[np.float64] | npt.NDArray[np.float32],
