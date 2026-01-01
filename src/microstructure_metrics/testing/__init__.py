@@ -148,6 +148,22 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         description="flatten AM depth with envelope smoothing.",
         metrics=("mps_correlation", "mps_distance"),
     ),
+    RegressionCase(
+        key="modulation_composite",
+        degradation="modulation_suppression",
+        signal_type="modulated",
+        severity=0.65,
+        duration=1.0,
+        description="AM+FM composite with envelope flattening.",
+        signal_kwargs={
+            "carrier_freq": 1200.0,
+            "am_freq": 6.0,
+            "am_depth": 0.5,
+            "fm_dev": 60.0,
+            "fm_freq": 6.0,
+        },
+        metrics=("mps_correlation", "mps_distance"),
+    ),
 )
 
 

@@ -23,6 +23,12 @@ Modern DAC/AMP devices easily achieve SINAD > 120 dB, yet steady-state measureme
 | Modulation Power Spectrum | MPS | Preservation of texture / modulation info |
 | Temporal Fine Structure Correlation | TFS | High-frequency phase coherence |
 
+### MPS options (S-09)
+- Log-scale modulation grid (`mod_scale="log"`, `num_mod_bins`).
+- Filterbank selection: gammatone (default) or mel (`filterbank="mel"`).
+- Envelope extraction switch: Hilbert (default) or rectification + LPF.
+- Similarity controls: optional band weights/energy weighting, global/per-band normalization, and power/log scale.
+
 ## Requirements
 
 - Python 3.13+
