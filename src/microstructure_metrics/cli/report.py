@@ -21,11 +21,13 @@ from microstructure_metrics.io import load_audio_pair
 from microstructure_metrics.metrics import (
     DeltaSEResult,
     MPSSimilarityResult,
+    NarrowbandNotchDepthResult,
     NPSResult,
     TFSCorrelationResult,
     THDNResult,
     calculate_delta_se,
     calculate_mps_similarity,
+    calculate_narrowband_notch_depth,
     calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
@@ -394,6 +396,13 @@ def _calculate_metrics(
         notch_center_hz=notch_center_hz,
         notch_q=notch_q,
     )
+    notch_psd = calculate_narrowband_notch_depth(
+        reference=aligned_ref,
+        dut=aligned_dut,
+        sample_rate=sample_rate,
+        notch_center_hz=notch_center_hz,
+        notch_q=notch_q,
+    )
     delta_se = calculate_delta_se(
         reference=aligned_ref,
         dut=aligned_dut,
@@ -423,6 +432,7 @@ def _calculate_metrics(
     return {
         "thd_n": _thd_summary(thd),
         "nps": _nps_summary(nps),
+        "notch_psd": _notch_psd_summary(notch_psd),
         "delta_se": _delta_se_summary(delta_se),
         "mps": _mps_summary(mps),
         "tfs": _tfs_summary(tfs),
@@ -477,6 +487,21 @@ def _nps_summary(result: NPSResult) -> dict[str, object]:
         "notch_q": float(result.notch_q),
         "noise_floor_db": float(result.noise_floor_db),
         "is_noise_limited": bool(result.is_noise_limited),
+    }
+
+
+def _notch_psd_summary(result: NarrowbandNotchDepthResult) -> dict[str, object]:
+    return {
+        "ref_notch_depth_db": float(result.ref_notch_depth_db),
+        "dut_notch_depth_db": float(result.dut_notch_depth_db),
+        "notch_fill_db": float(result.notch_fill_db),
+        "ref_notch_power_db": float(result.ref_notch_power_db),
+        "dut_notch_power_db": float(result.dut_notch_power_db),
+        "ref_ring_power_db": float(result.ref_ring_power_db),
+        "dut_ring_power_db": float(result.dut_ring_power_db),
+        "notch_center_hz": float(result.notch_center_hz),
+        "notch_bandwidth_hz": float(result.notch_bandwidth_hz),
+        "ring_bandwidth_hz": float(result.ring_bandwidth_hz),
     }
 
 

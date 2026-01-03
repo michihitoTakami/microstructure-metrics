@@ -15,6 +15,7 @@ from scipy import signal
 from microstructure_metrics.metrics import (
     calculate_delta_se,
     calculate_mps_similarity,
+    calculate_narrowband_notch_depth,
     calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
@@ -45,6 +46,9 @@ _ALL_METRIC_KEYS = {
     "delta_se_max",
     "mps_correlation",
     "mps_distance",
+    "psd_notch_fill_db",
+    "psd_ref_notch_depth_db",
+    "psd_dut_notch_depth_db",
     "tfs_mean_correlation",
     "tfs_phase_coherence",
 }
@@ -129,7 +133,14 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         severity=0.7,
         duration=1.2,
         description="fill the spectral notch with band-limited noise.",
-        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+        metrics=(
+            "nps_db",
+            "dut_notch_depth_db",
+            "ref_notch_depth_db",
+            "psd_notch_fill_db",
+            "psd_ref_notch_depth_db",
+            "psd_dut_notch_depth_db",
+        ),
     ),
     RegressionCase(
         key="notch_fill_low_q",
@@ -142,7 +153,14 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
             "notch_q": 2.0,
         },
         description="fill the spectral notch with band-limited noise (low-Q notch).",
-        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+        metrics=(
+            "nps_db",
+            "dut_notch_depth_db",
+            "ref_notch_depth_db",
+            "psd_notch_fill_db",
+            "psd_ref_notch_depth_db",
+            "psd_dut_notch_depth_db",
+        ),
     ),
     RegressionCase(
         key="notch_fill_high_q",
@@ -156,7 +174,14 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
             "notch_cascade_stages": 2,
         },
         description="fill the spectral notch with band-limited noise (high-Q notch).",
-        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+        metrics=(
+            "nps_db",
+            "dut_notch_depth_db",
+            "ref_notch_depth_db",
+            "psd_notch_fill_db",
+            "psd_ref_notch_depth_db",
+            "psd_dut_notch_depth_db",
+        ),
     ),
     RegressionCase(
         key="phase_distortion",
@@ -554,6 +579,22 @@ def evaluate_metrics(
         results["nps_db"] = nps.nps_db
         results["ref_notch_depth_db"] = nps.ref_notch_depth_db
         results["dut_notch_depth_db"] = nps.dut_notch_depth_db
+
+    if {
+        "psd_notch_fill_db",
+        "psd_ref_notch_depth_db",
+        "psd_dut_notch_depth_db",
+    } & requested:
+        psd = calculate_narrowband_notch_depth(
+            reference=reference,
+            dut=dut,
+            sample_rate=sample_rate,
+            notch_center_hz=_coerce_float(metadata.get("notch_center_hz"), 8000.0),
+            notch_q=_coerce_float(metadata.get("notch_q"), 20.0),
+        )
+        results["psd_notch_fill_db"] = psd.notch_fill_db
+        results["psd_ref_notch_depth_db"] = psd.ref_notch_depth_db
+        results["psd_dut_notch_depth_db"] = psd.dut_notch_depth_db
 
     if {"delta_se_mean", "delta_se_max"} & requested:
         delta = calculate_delta_se(
