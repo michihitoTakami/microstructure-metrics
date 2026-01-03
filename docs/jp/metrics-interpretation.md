@@ -41,6 +41,11 @@
 - 目安: 相関 0.85 以上で良好。`group_delay_std_ms` が大きい（>0.2 ms 程度）場合、帯域間の時間ずれが大きい可能性。
 - 帯域別 `band_group_delays_ms` で特定の帯域の遅延ズレを確認。
 
+### Transient / エッジ丸まり
+- 内容: インパルス/クリックの立ち上がり丸まりを検出。`attack_time_ms`(DUT), `attack_time_delta_ms`(DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index`(幅比) を確認。
+- 目安: `attack_time_delta_ms` > 0 または `edge_sharpness_ratio` < 1 で鈍化傾向。`transient_smearing_index` > 1 で主峰が広がり(スメア)。
+- ノイズ/位相ばらつき耐性: 包絡エネルギーを平滑してから特徴抽出。
+
 ## 典型的な読み解き例
 - 「NPS が +4 dB、ΔSE が +0.03」: ノッチが埋まり、情報量も損なわれている。動的IMDや高域ノイズの混入を疑う。
 - 「MPS 相関 0.75, 距離大、TFS 相関 0.8」: テクスチャと位相微細構造がともに崩れており、フィードバックや帯域制限の影響が考えられる。
