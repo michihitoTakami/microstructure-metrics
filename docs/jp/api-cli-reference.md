@@ -68,7 +68,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
   - THD: `--fundamental-freq` `--expected-level-dbfs`
-  - NPS: `--notch-center-hz` `--notch-q`
+  - NPS/ノッチPSD: `--notch-center-hz` `--notch-q`
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
 - 例: JSON と Markdown を保存
 ```
@@ -83,6 +83,6 @@ uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
 
 ## Python API エントリポイント
 - アライメント/ドリフト: `microstructure_metrics.alignment.align_audio_pair`, `estimate_clock_drift`
-- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_nps`, `calculate_delta_se`, `calculate_mps_similarity`, `calculate_tfs_correlation`
+- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_nps`, `calculate_narrowband_notch_depth`, `calculate_delta_se`, `calculate_mps_similarity`, `calculate_tfs_correlation`
 - 信号生成: `microstructure_metrics.signals.build_signal`
 各APIは numpy array とサンプルレートを受け取り、結果dataclassを返す。

@@ -6,6 +6,10 @@ from microstructure_metrics.metrics.mps import (
     calculate_mps,
     calculate_mps_similarity,
 )
+from microstructure_metrics.metrics.notch_psd import (
+    NarrowbandNotchDepthResult,
+    calculate_narrowband_notch_depth,
+)
 from microstructure_metrics.metrics.nps import NPSResult, calculate_nps
 from microstructure_metrics.metrics.spectral_entropy import (
     DeltaSEResult,
@@ -32,6 +36,8 @@ __all__ = [
     "MPSSimilarityResult",
     "calculate_mps",
     "calculate_mps_similarity",
+    "NarrowbandNotchDepthResult",
+    "calculate_narrowband_notch_depth",
     "SpectralEntropyResult",
     "DeltaSEResult",
     "calculate_spectral_entropy",

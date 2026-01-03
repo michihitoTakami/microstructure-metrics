@@ -89,6 +89,15 @@ notch_fill:
     ref_notch_depth_db:
       expected: 3.9345129803005707
       tolerance: 2.0
+    psd_notch_fill_db:
+      expected: 2.0707396329835213
+      tolerance: 2.0
+    psd_ref_notch_depth_db:
+      expected: 5.541968989913424
+      tolerance: 2.0
+    psd_dut_notch_depth_db:
+      expected: 3.4712293569299026
+      tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
 notch_fill_high_q:
@@ -104,6 +113,15 @@ notch_fill_high_q:
     ref_notch_depth_db:
       expected: 1.0918665752155405
       tolerance: 2.0
+    psd_notch_fill_db:
+      expected: 12.242771972096898
+      tolerance: 2.0
+    psd_ref_notch_depth_db:
+      expected: 9.095278432111074
+      tolerance: 2.0
+    psd_dut_notch_depth_db:
+      expected: -3.147493539985824
+      tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
 notch_fill_low_q:
@@ -118,6 +136,15 @@ notch_fill_low_q:
       tolerance: 2.0
     ref_notch_depth_db:
       expected: 4.480671128910604
+      tolerance: 2.0
+    psd_notch_fill_db:
+      expected: 0.5254934482138687
+      tolerance: 1.5
+    psd_ref_notch_depth_db:
+      expected: 7.43106783521739
+      tolerance: 2.0
+    psd_dut_notch_depth_db:
+      expected: 6.905574387003521
       tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise

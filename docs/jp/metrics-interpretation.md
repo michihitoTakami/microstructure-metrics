@@ -20,6 +20,12 @@
 - 目安: 0 dB 以上でノッチが埋まり始めている。+3 dB 以上なら動的IMD/ノイズの影響が疑われる。
 - `is_noise_limited` が true の場合、ノイズフロア不足で信頼度が下がる。
 
+### PSDノッチ深さ (Notch PSD)
+- 内容: Welch PSD でノッチ中心±帯域のパワーを測定し、周辺リングとの比で深さを算出。高Qノッチの底上がり検出用。
+- 出力: `notch_psd.notch_fill_db`（正で埋まり量）、`ref_notch_depth_db`、`dut_notch_depth_db`、`notch_bandwidth_hz`、`ring_bandwidth_hz`。
+- 目安: `notch_fill_db` が 0 に近ければ維持。+6 dB 以上でノッチ埋まり傾向。深さが負ならノッチ消失の可能性。
+- 補足: NPSより狭帯域で高Q設定に追従。ノイズフロアが浅い場合はばらつくため、複数試行の平均が安定。
+
 ### Spectral Entropy ΔSE
 - 内容: スペクトルエントロピー差分。DUTが平坦化すると ΔSE が正方向に増える。
 - 目安: `delta_se_mean` が 0.02 以上で情報量劣化の兆候。0 に近いほどリファレンスに忠実。
