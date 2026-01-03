@@ -131,6 +131,28 @@ def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
                 "--fm-dev": "50",
             },
         ),
+        (
+            "tone-burst",
+            {
+                "--burst-freq": "8000",
+                "--burst-cycles": "10",
+                "--burst-level-dbfs": "-6",
+                "--burst-fade-cycles": "2",
+            },
+        ),
+        (
+            "am-attack",
+            {
+                "--carrier": "1000",
+                "--attack-ms": "2",
+                "--release-ms": "10",
+                "--gate-period-ms": "100",
+            },
+        ),
+        (
+            "click",
+            {"--click-level-dbfs": "-6", "--click-band-limit-hz": "20000"},
+        ),
     ],
 )
 def test_generate_other_signals_structure_and_pilot(tmp_path: Path, signal_type, opts):
@@ -164,6 +186,61 @@ def test_generate_other_signals_structure_and_pilot(tmp_path: Path, signal_type,
 
     metadata = sf.info(wav_path)
     assert metadata.samplerate == 48000
+
+
+@pytest.mark.parametrize(
+    "signal_type,opts,expected_keys",
+    [
+        (
+            "tone-burst",
+            {
+                "--burst-freq": "8000",
+                "--burst-cycles": "10",
+                "--burst-level-dbfs": "-6",
+                "--burst-fade-cycles": "2",
+            },
+            ["burst_freq_hz", "burst_cycles", "burst_fade_cycles", "burst_level_dbfs"],
+        ),
+        (
+            "am-attack",
+            {
+                "--carrier": "1000",
+                "--attack-ms": "2",
+                "--release-ms": "10",
+                "--gate-period-ms": "100",
+            },
+            ["carrier_hz", "attack_ms", "release_ms", "gate_period_ms"],
+        ),
+        (
+            "click",
+            {"--click-level-dbfs": "-6", "--click-band-limit-hz": "20000"},
+            ["click_level_dbfs", "click_band_limit_hz"],
+        ),
+    ],
+)
+def test_generate_transient_signals_metadata_keys(
+    tmp_path: Path, signal_type: str, opts: dict[str, str], expected_keys: list[str]
+) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / f"{signal_type}.wav"
+    args = [
+        "generate",
+        signal_type,
+        "--duration",
+        "0.2",
+        "--output",
+        str(wav_path),
+        "--with-metadata",
+    ]
+    for k, v in opts.items():
+        args.extend([k, v])
+    result = runner.invoke(main, args)
+    assert result.exit_code == 0, result.output
+    meta_path = wav_path.with_suffix(".json")
+    assert meta_path.exists()
+    payload = meta_path.read_text()
+    for key in expected_keys:
+        assert f'"{key}"' in payload
 
 
 def test_pilot_frequency_and_level(tmp_path: Path) -> None:

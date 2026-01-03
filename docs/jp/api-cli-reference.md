@@ -10,7 +10,7 @@
 ```
 uv run microstructure-metrics generate <signal_type> [options]
 ```
-- `signal_type`: thd / notched-noise / pink-noise / modulated / tfs-tones
+- `signal_type`: thd / notched-noise / pink-noise / modulated / tfs-tones / tone-burst / am-attack / click
 - 主なオプション:
   - `--sample-rate,-sr` (int, default 48000)
   - `--bit-depth,-bd` ("24bit" or "32f")
@@ -20,6 +20,9 @@ uv run microstructure-metrics generate <signal_type> [options]
   - NPS(notched-noise): `--center` `--centers` `--q` `--notch-cascade-stages` `--lowcut` `--highcut`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
   - TFS: `--min-freq` `--tone-count` `--tone-step`
+  - tone-burst: `--burst-freq` `--burst-cycles` `--burst-level-dbfs` `--burst-fade-cycles`
+  - am-attack: `--carrier` `--attack-ms` `--release-ms` `--gate-period-ms`
+  - click: `--click-level-dbfs` `--click-band-limit-hz`
   - 出力: `--output,-o` (WAV path), `--with-metadata` (JSONも出力)
 - 例: ノッチノイズ + メタデータ
 ```

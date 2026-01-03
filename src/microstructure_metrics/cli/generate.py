@@ -180,6 +180,69 @@ def _parse_float_list(text: str) -> list[float]:
     help="TFSマルチトーンの周波数間隔 (Hz)",
 )
 @click.option(
+    "--burst-freq",
+    default=8000.0,
+    show_default=True,
+    type=click.FloatRange(min=1.0),
+    help="tone-burst用: バースト周波数 (Hz)",
+)
+@click.option(
+    "--burst-cycles",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="tone-burst用: バースト周期数 (cycles)",
+)
+@click.option(
+    "--burst-level-dbfs",
+    default=-6.0,
+    show_default=True,
+    type=click.FloatRange(max=0.0),
+    help="tone-burst用: 目標ピークレベル (dBFS)",
+)
+@click.option(
+    "--burst-fade-cycles",
+    default=2,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="tone-burst用: フェードに使う周期数 (cycles)",
+)
+@click.option(
+    "--attack-ms",
+    default=2.0,
+    show_default=True,
+    type=click.FloatRange(min=0.01),
+    help="am-attack用: 立ち上がり時間 (ms)",
+)
+@click.option(
+    "--release-ms",
+    default=10.0,
+    show_default=True,
+    type=click.FloatRange(min=0.01),
+    help="am-attack用: 立ち下がり時間 (ms)",
+)
+@click.option(
+    "--gate-period-ms",
+    default=100.0,
+    show_default=True,
+    type=click.FloatRange(min=0.1),
+    help="am-attack用: ゲート周期 (ms)",
+)
+@click.option(
+    "--click-level-dbfs",
+    default=-6.0,
+    show_default=True,
+    type=click.FloatRange(max=0.0),
+    help="click用: 目標ピークレベル (dBFS)",
+)
+@click.option(
+    "--click-band-limit-hz",
+    default=20000.0,
+    show_default=True,
+    type=click.FloatRange(min=10.0),
+    help="click用: 擬似クリックの帯域制限 (Hz)",
+)
+@click.option(
     "--output",
     "-o",
     type=click.Path(),
@@ -215,6 +278,15 @@ def generate(
     min_freq: float,
     tone_count: int,
     tone_step: float,
+    burst_freq: float,
+    burst_cycles: int,
+    burst_level_dbfs: float,
+    burst_fade_cycles: int,
+    attack_ms: float,
+    release_ms: float,
+    gate_period_ms: float,
+    click_level_dbfs: float,
+    click_band_limit_hz: float,
     output: str | None,
     with_metadata: bool,
 ) -> None:
@@ -238,6 +310,33 @@ def generate(
     ):
         raise click.ClickException(
             "--centers/複数--q/--notch-cascade-stages は notched-noise 専用です"
+        )
+
+    # Guard: options below only make sense for tone-burst.
+    if normalized_type != "tone-burst" and (
+        burst_freq != 8000.0
+        or burst_cycles != 10
+        or burst_level_dbfs != -6.0
+        or burst_fade_cycles != 2
+    ):
+        raise click.ClickException(
+            "--burst-* は tone-burst 専用です（tone-burst以外では指定しないでください）"
+        )
+
+    # Guard: options below only make sense for am-attack.
+    if normalized_type != "am-attack" and (
+        attack_ms != 2.0 or release_ms != 10.0 or gate_period_ms != 100.0
+    ):
+        raise click.ClickException(
+            "--attack-ms/--release-ms/--gate-period-ms は am-attack 専用です"
+        )
+
+    # Guard: options below only make sense for click.
+    if normalized_type != "click" and (
+        click_level_dbfs != -6.0 or click_band_limit_hz != 20000.0
+    ):
+        raise click.ClickException(
+            "--click-* は click 専用です（click以外では指定しないでください）"
         )
 
     def _write_one(*, result: SignalBuildResult, wav_path: Path) -> None:
@@ -284,6 +383,15 @@ def generate(
                 min_tone_freq=min_freq,
                 tone_count=tone_count,
                 tone_step=tone_step,
+                burst_freq=burst_freq,
+                burst_cycles=burst_cycles,
+                burst_level_dbfs=burst_level_dbfs,
+                burst_fade_cycles=burst_fade_cycles,
+                attack_ms=attack_ms,
+                release_ms=release_ms,
+                gate_period_ms=gate_period_ms,
+                click_level_dbfs=click_level_dbfs,
+                click_band_limit_hz=click_band_limit_hz,
             )
             wav_path = out_base / f"{result.suggested_stem}.wav"
             _write_one(result=result, wav_path=wav_path)
@@ -310,6 +418,15 @@ def generate(
         min_tone_freq=min_freq,
         tone_count=tone_count,
         tone_step=tone_step,
+        burst_freq=burst_freq,
+        burst_cycles=burst_cycles,
+        burst_level_dbfs=burst_level_dbfs,
+        burst_fade_cycles=burst_fade_cycles,
+        attack_ms=attack_ms,
+        release_ms=release_ms,
+        gate_period_ms=gate_period_ms,
+        click_level_dbfs=click_level_dbfs,
+        click_band_limit_hz=click_band_limit_hz,
     )
     wav_path = Path(output) if output else Path(f"{result.suggested_stem}.wav")
     _write_one(result=result, wav_path=wav_path)
