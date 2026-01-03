@@ -138,9 +138,15 @@ def calculate_tfs_correlation(
         band_correlations[band_key] = corr
         band_group_delays_ms[band_key] = (lag / sample_rate) * 1000.0
 
-        phase_diff = (
-            components_ref.instantaneous_phase - components_dut.instantaneous_phase
+        # Compensate constant time lag (group delay) before phase coherence.
+        # Without this, a benign fixed delay between reference/DUT can artificially
+        # reduce phase coherence even when fine structure matches.
+        phase_ref, phase_dut = _overlap_with_lag(
+            components_ref.instantaneous_phase, components_dut.instantaneous_phase, lag
         )
+        if phase_ref.size == 0:
+            continue
+        phase_diff = phase_ref - phase_dut
         wrapped = _wrap_phase(phase_diff)
         phase_vector_sum += np.sum(np.exp(1j * wrapped))
         phase_count += wrapped.size
@@ -196,11 +202,40 @@ def _normalized_correlation(
         return 0.0, 0
     corr = sp_signal.correlate(a, b, mode="full", method="fft") / denom
     lags = sp_signal.correlation_lags(a.size, b.size, mode="full")
-    peak_idx = int(np.argmax(np.abs(corr)))
-    return float(np.real(corr[peak_idx])), int(lags[peak_idx])
+    # Prefer the lag that maximizes *positive* correlation.
+    # Using |corr| can pick an inverted (anti-correlated) alignment, which then
+    # pollutes downstream stats (including phase coherence).
+    real_corr = np.real(corr)
+    peak_idx = int(np.argmax(real_corr))
+    return float(real_corr[peak_idx]), int(lags[peak_idx])
 
 
 def _wrap_phase(phase_diff: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Wrap phase difference to [-pi, pi] range."""
 
     return np.asarray(np.angle(np.exp(1j * phase_diff)), dtype=np.float64)
+
+
+def _overlap_with_lag(
+    a: npt.NDArray[np.float64], b: npt.NDArray[np.float64], lag: int
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    """Return overlapping segments after aligning b to a using lag (in samples).
+
+    lag is the shift (in samples) that maximizes correlation between (a, b).
+    We drop non-overlapping edges instead of padding/circular shifting.
+    """
+
+    if a.shape != b.shape:
+        raise ValueError("signals must have the same shape to apply lag overlap")
+    if lag == 0:
+        return a, b
+    if lag > 0:
+        # b is delayed relative to a -> drop a's head and b's tail
+        if lag >= a.size:
+            return a[:0], b[:0]
+        return a[lag:], b[:-lag]
+    # lag < 0: b is advanced relative to a -> drop a's tail and b's head
+    shift = -lag
+    if shift >= a.size:
+        return a[:0], b[:0]
+    return a[:-shift], b[shift:]

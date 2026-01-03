@@ -75,3 +75,28 @@ def test_tfs_correlation_degrades_with_phase_modulation() -> None:
 
     assert result.mean_correlation < 0.85
     assert result.phase_coherence < 0.9
+
+
+def test_tfs_phase_coherence_is_robust_to_constant_delay() -> None:
+    sr = 48_000
+    duration = 0.25
+    t = np.arange(int(sr * duration)) / sr
+    tones = [2500.0, 3500.0, 5000.0, 7000.0]
+    base = np.sum([np.sin(2 * np.pi * f * t) for f in tones], axis=0) / len(tones)
+
+    # Use a small delay so the band-wise lag estimate is not ambiguous
+    # (periodicity can produce multiple correlation peaks for larger delays).
+    delay = 7  # samples (~0.15 ms)
+    # Avoid inserting zeros (which can introduce filtfilt boundary artifacts).
+    # Instead, take two offset windows from the same underlying waveform.
+    dut = base[:-delay]
+    reference = base[delay:]
+
+    result = calculate_tfs_correlation(
+        reference=reference,
+        dut=dut,
+        sample_rate=sr,
+    )
+
+    assert result.mean_correlation > 0.9
+    assert result.phase_coherence > 0.95
