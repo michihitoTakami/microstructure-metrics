@@ -18,6 +18,11 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Heuristic: ≥0 dB means the notch is filling; >+3 dB suggests IMD/noise pollution.
 - `is_noise_limited` true means noise floor is too high to trust depth.
 
+### PSD Notch Depth (high-Q)
+- What: Welch PSD around the notch center vs surrounding ring; narrowband depth for high-Q notches. Keys under `notch_psd`: `notch_fill_db`, `ref_notch_depth_db`, `dut_notch_depth_db`, `notch_bandwidth_hz`, `ring_bandwidth_hz`.
+- Heuristic: `notch_fill_db` near 0 means preserved; +6 dB or more indicates notable fill. Negative depth implies the notch is effectively gone.
+- Note: More sensitive to PSD resolution; low noise floor or multiple runs improve stability.
+
 ### Spectral Entropy ΔSE
 - What: entropy difference; flattening increases ΔSE.
 - Heuristic: `delta_se_mean` ≥ 0.02 indicates information loss; closer to 0 is better.
