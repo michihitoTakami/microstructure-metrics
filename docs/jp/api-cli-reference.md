@@ -17,13 +17,25 @@ uv run microstructure-metrics generate <signal_type> [options]
   - `--duration,-d` (sec, default 10.0) テスト本体長
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
-  - NPS: `--center` `--q` `--lowcut` `--highcut`
+  - NPS(notched-noise): `--center` `--centers` `--q` `--notch-cascade-stages` `--lowcut` `--highcut`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
   - TFS: `--min-freq` `--tone-count` `--tone-step`
   - 出力: `--output,-o` (WAV path), `--with-metadata` (JSONも出力)
 - 例: ノッチノイズ + メタデータ
 ```
 uv run microstructure-metrics generate notched-noise --with-metadata
+```
+
+- 例: **Qスイープ**（複数Qの一括生成。`--output` はディレクトリを指定）
+```
+uv run microstructure-metrics generate notched-noise --q 2 --q 8.6 --q 30 --q 80 \
+  --output out/notch_q_sweep --with-metadata
+```
+
+- 例: **マルチノッチ + ノッチ強化**（複数中心周波数 + カスケード段数）
+```
+uv run microstructure-metrics generate notched-noise --centers "3000,5000,7000,9000" \
+  --q 8.6 --notch-cascade-stages 2 --with-metadata
 ```
 
 ## align — パイロット整列

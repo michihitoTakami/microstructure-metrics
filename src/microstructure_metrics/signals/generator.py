@@ -19,6 +19,11 @@ SUPPORTED_SIGNALS = (
 )
 
 
+def _format_q_for_stem(q: float) -> str:
+    # Keep filenames stable/readable: 2.0 -> "2", 8.6 -> "8.6"
+    return f"{float(q):g}"
+
+
 @dataclass(frozen=True)
 class CommonSignalConfig:
     sample_rate: int = 48000
@@ -75,6 +80,8 @@ def build_signal(
     tone_level_dbfs: float = -3.0,
     notch_center: float = 8000.0,
     notch_q: float = 8.6,
+    notch_centers_hz: list[float] | None = None,
+    notch_cascade_stages: int = 1,
     noise_lowcut: float = 20.0,
     noise_highcut: float | None = 20000.0,
     am_freq: float = 4.0,
@@ -105,19 +112,31 @@ def build_signal(
             "tone_level_dbfs": tone_level_dbfs,
         }
     elif normalized_type == "notched-noise":
+        if notch_cascade_stages < 1:
+            raise ValueError("notch_cascade_stages must be >= 1")
+        centers = notch_centers_hz or [notch_center]
         body = _generate_notched_noise(
             sample_rate=sample_rate,
             samples=samples,
-            center_hz=notch_center,
+            centers_hz=centers,
             q=notch_q,
+            cascade_stages=notch_cascade_stages,
             lowcut=noise_lowcut,
             highcut=noise_highcut,
             rng=rng,
         )
-        descriptor = f"{int(notch_center)}hz_q{notch_q}"
+        q_text = _format_q_for_stem(notch_q)
+        if len(centers) == 1:
+            descriptor = f"{int(centers[0])}hz_q{q_text}"
+        else:
+            descriptor = (
+                f"{len(centers)}n_{int(min(centers))}-{int(max(centers))}hz_q{q_text}"
+            )
         extra_meta = {
-            "notch_center_hz": notch_center,
+            "notch_center_hz": float(centers[0]),
+            "notch_centers_hz": [float(c) for c in centers],
             "notch_q": notch_q,
+            "notch_cascade_stages": int(notch_cascade_stages),
             "noise_color": "pink",
             "noise_lowcut_hz": noise_lowcut,
             "noise_highcut_hz": noise_highcut,
@@ -234,8 +253,9 @@ def _generate_notched_noise(
     *,
     sample_rate: int,
     samples: int,
-    center_hz: float,
+    centers_hz: list[float],
     q: float,
+    cascade_stages: int,
     lowcut: float | None,
     highcut: float | None,
     rng: np.random.Generator,
@@ -250,10 +270,18 @@ def _generate_notched_noise(
     nyquist = sample_rate / 2
     if q <= 0:
         raise ValueError("Notch Q must be positive.")
-    if not 0 < center_hz < nyquist:
-        raise ValueError("Notch center must be within (0, Nyquist)")
-    b, a = signal.iirnotch(w0=center_hz / nyquist, Q=q)
-    filtered = signal.lfilter(b, a, base)
+    if cascade_stages < 1:
+        raise ValueError("cascade_stages must be >= 1")
+    if not centers_hz:
+        raise ValueError("centers_hz must not be empty")
+    for center_hz in centers_hz:
+        if not 0 < center_hz < nyquist:
+            raise ValueError("Notch center must be within (0, Nyquist)")
+    filtered = base
+    for _ in range(cascade_stages):
+        for center_hz in centers_hz:
+            b, a = signal.iirnotch(w0=float(center_hz) / nyquist, Q=float(q))
+            filtered = signal.lfilter(b, a, filtered)
     return _scale_to_dbfs(filtered, -14.0, mode="rms")
 
 

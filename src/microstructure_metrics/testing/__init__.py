@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -131,6 +132,33 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
     ),
     RegressionCase(
+        key="notch_fill_low_q",
+        degradation="notch_fill",
+        signal_type="notched-noise",
+        severity=0.7,
+        duration=1.2,
+        rng_seed=1,
+        signal_kwargs={
+            "notch_q": 2.0,
+        },
+        description="fill the spectral notch with band-limited noise (low-Q notch).",
+        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+    ),
+    RegressionCase(
+        key="notch_fill_high_q",
+        degradation="notch_fill",
+        signal_type="notched-noise",
+        severity=0.7,
+        duration=1.2,
+        rng_seed=2,
+        signal_kwargs={
+            "notch_q": 80.0,
+            "notch_cascade_stages": 2,
+        },
+        description="fill the spectral notch with band-limited noise (high-Q notch).",
+        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+    ),
+    RegressionCase(
         key="phase_distortion",
         degradation="phase_distortion",
         signal_type="tfs-tones",
@@ -201,6 +229,11 @@ def generate_degraded_pair(
         degradation_kwargs=degradation_kwargs or {},
     )
 
+    # Stabilize metadata for regression fixtures (avoid noisy diffs due to timestamps).
+    fixed_created_at = datetime(2000, 1, 1, tzinfo=UTC).isoformat()
+    reference_metadata = dict(base.metadata)
+    reference_metadata["created_at"] = fixed_created_at
+
     dut_metadata = dict(base.metadata)
     dut_metadata.update(
         {
@@ -209,6 +242,7 @@ def generate_degraded_pair(
             "rng_seed": rng_seed,
         }
     )
+    dut_metadata["created_at"] = fixed_created_at
     stem = f"{base.suggested_stem}_{degradation}"
 
     return DegradedPair(
@@ -216,7 +250,7 @@ def generate_degraded_pair(
         dut=degraded,
         sample_rate=sample_rate,
         common=common,
-        reference_metadata=base.metadata,
+        reference_metadata=reference_metadata,
         dut_metadata=dut_metadata,
         stem=stem,
         degradation=degradation,

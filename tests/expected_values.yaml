@@ -28,18 +28,6 @@ harmonic_distortion:
       tolerance: 2.0
   severity: 0.7
   signal_type: thd
-modulation_suppression:
-  degradation: modulation_suppression
-  description: flatten AM depth with envelope smoothing.
-  metrics:
-    mps_correlation:
-      expected: 0.959859843369868
-      tolerance: 0.05
-    mps_distance:
-      expected: 0.004380073607409083
-      tolerance: 0.01
-  severity: 0.7
-  signal_type: modulated
 modulation_composite:
   degradation: modulation_suppression
   description: AM+FM composite with envelope flattening.
@@ -51,6 +39,18 @@ modulation_composite:
       expected: 0.006346886377376469
       tolerance: 0.01
   severity: 0.65
+  signal_type: modulated
+modulation_suppression:
+  degradation: modulation_suppression
+  description: flatten AM depth with envelope smoothing.
+  metrics:
+    mps_correlation:
+      expected: 0.959859843369868
+      tolerance: 0.05
+    mps_distance:
+      expected: 0.004380073607409083
+      tolerance: 0.01
+  severity: 0.7
   signal_type: modulated
 noise_floor:
   degradation: noise
@@ -76,6 +76,36 @@ notch_fill:
       tolerance: 2.0
     ref_notch_depth_db:
       expected: 3.9345129803005707
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: notched-noise
+notch_fill_high_q:
+  degradation: notch_fill
+  description: fill the spectral notch with band-limited noise (high-Q notch).
+  metrics:
+    dut_notch_depth_db:
+      expected: 0.2886725312043265
+      tolerance: 2.0
+    nps_db:
+      expected: -0.8031940440112135
+      tolerance: 2.0
+    ref_notch_depth_db:
+      expected: 1.0918665752155405
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: notched-noise
+notch_fill_low_q:
+  degradation: notch_fill
+  description: fill the spectral notch with band-limited noise (low-Q notch).
+  metrics:
+    dut_notch_depth_db:
+      expected: 4.029185351389211
+      tolerance: 2.0
+    nps_db:
+      expected: -0.4514857775213922
+      tolerance: 2.0
+    ref_notch_depth_db:
+      expected: 4.480671128910604
       tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
