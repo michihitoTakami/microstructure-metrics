@@ -34,8 +34,10 @@ DEGRADATION_TYPES = (
     "band_limit",
     "noise",
     "notch_fill",
+    "notch_blur",
     "phase_distortion",
     "modulation_suppression",
+    "time_smoothing",
 )
 _ALL_METRIC_KEYS = {
     "thd_n_db",
@@ -189,6 +191,22 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         ),
     ),
     RegressionCase(
+        key="notch_blur",
+        degradation="notch_blur",
+        signal_type="notched-noise",
+        severity=0.7,
+        duration=1.2,
+        description="blur the spectral notch by smoothing magnitude response.",
+        metrics=(
+            "nps_db",
+            "dut_notch_depth_db",
+            "ref_notch_depth_db",
+            "psd_notch_fill_db",
+            "psd_ref_notch_depth_db",
+            "psd_dut_notch_depth_db",
+        ),
+    ),
+    RegressionCase(
         key="phase_distortion",
         degradation="phase_distortion",
         signal_type="tfs-tones",
@@ -233,6 +251,21 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         metrics=(
             "delta_se_mean",
             "delta_se_max",
+            "attack_time_delta_ms",
+            "edge_sharpness_ratio",
+            "transient_smearing_index",
+        ),
+    ),
+    RegressionCase(
+        key="time_smoothing_attack",
+        degradation="time_smoothing",
+        signal_type="am-attack",
+        severity=0.7,
+        duration=1.0,
+        description="envelope smoothing to emulate rounded attacks without heavy LPF.",
+        metrics=(
+            "delta_se_mean",
+            "attack_time_ms",
             "attack_time_delta_ms",
             "edge_sharpness_ratio",
             "transient_smearing_index",
@@ -350,8 +383,10 @@ def _default_signal_for_degradation(degradation: str) -> str:
         "band_limit": "tfs-tones",
         "noise": "thd",
         "notch_fill": "notched-noise",
+        "notch_blur": "notched-noise",
         "phase_distortion": "tfs-tones",
         "modulation_suppression": "modulated",
+        "time_smoothing": "am-attack",
     }
     return mapping.get(degradation, "pink-noise")
 
@@ -414,10 +449,29 @@ def _apply_degradation(
             metadata=metadata,
             rng=rng,
         )
+    if degrad == "notch_blur":
+        return _apply_notch_blur(
+            data,
+            level=level,
+            blur_bins=degradation_kwargs.get("blur_bins"),
+        )
     if degrad == "phase_distortion":
         return _apply_phase_distortion(data, sample_rate=sample_rate, level=level)
     if degrad == "modulation_suppression":
         return _apply_modulation_suppression(data, level=level)
+    if degrad == "time_smoothing":
+        smoothing_override = degradation_kwargs.get("smoothing_ms")
+        smoothing_ms = (
+            _coerce_float(smoothing_override, 0.0)
+            if smoothing_override is not None
+            else None
+        )
+        return _apply_time_smoothing(
+            data,
+            sample_rate=sample_rate,
+            level=level,
+            smoothing_ms=smoothing_ms,
+        )
     raise ValueError(f"Unsupported degradation type: {degradation}")
 
 
@@ -500,6 +554,33 @@ def _apply_notch_fill(
     return _match_peak(data + band_noise, reference=data)
 
 
+def _apply_notch_blur(
+    data: npt.NDArray[np.float64],
+    *,
+    level: float,
+    blur_bins: float | int | str | None,
+) -> npt.NDArray[np.float64]:
+    spec = np.fft.rfft(data)
+    if spec.size == 0:
+        return data
+    magnitude = np.abs(spec)
+    phase = np.angle(spec)
+    base_radius = max(1, int(round(4 + 40 * level)))
+    radius = int(max(1, _coerce_float(blur_bins, float(base_radius))))
+    radius = min(radius, magnitude.shape[0] - 1)
+    if radius <= 0:
+        return data
+    window = signal.windows.gaussian(2 * radius + 1, std=max(radius / 2.5, 1.0))
+    window_sum = float(np.sum(window))
+    if window_sum <= 0:
+        return data
+    kernel = window / window_sum
+    blurred_mag = np.convolve(magnitude, kernel, mode="same")
+    blurred_spec = blurred_mag * np.exp(1j * phase)
+    blurred = np.fft.irfft(blurred_spec, n=data.shape[0])
+    return _match_peak(np.real(blurred), reference=data)
+
+
 def _apply_phase_distortion(
     data: npt.NDArray[np.float64],
     *,
@@ -529,6 +610,26 @@ def _apply_modulation_suppression(
     flattened_env = mean_env + (1.0 - suppression) * (envelope - mean_env)
     flattened = flattened_env * np.exp(1j * phase)
     return _match_peak(np.real(flattened), reference=data)
+
+
+def _apply_time_smoothing(
+    data: npt.NDArray[np.float64],
+    *,
+    sample_rate: int,
+    level: float,
+    smoothing_ms: float | None,
+) -> npt.NDArray[np.float64]:
+    target_ms = 1.0 + 6.0 * level
+    tau_ms = max(0.1, smoothing_ms) if smoothing_ms is not None else max(0.1, target_ms)
+    tau_seconds = tau_ms / 1000.0
+    alpha = float(np.exp(-1.0 / max(sample_rate * tau_seconds, 1e-6)))
+    b = [1.0 - alpha]
+    a = [1.0, -alpha]
+    analytic = signal.hilbert(data)
+    envelope = np.abs(analytic)
+    smoothed_env = signal.lfilter(b, a, envelope)
+    smoothed = smoothed_env * np.exp(1j * np.angle(analytic))
+    return _match_peak(np.real(smoothed), reference=data)
 
 
 def _safe_rms(data: npt.NDArray[np.float64]) -> float:
