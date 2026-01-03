@@ -1,0 +1,21 @@
+{
+  "signal_type": "tone_burst",
+  "sample_rate": 48000,
+  "bit_depth": "24bit",
+  "channels": 1,
+  "duration_sec": 2.2,
+  "pilot_tone_freq_hz": 1000.0,
+  "pilot_duration_ms": 100,
+  "pilot_level_dbfs": -6.0,
+  "lead_silence_ms": 500,
+  "tail_silence_ms": 500,
+  "created_at": "2000-01-01T00:00:00+00:00",
+  "version": "1.0.0",
+  "burst_freq_hz": 8000.0,
+  "burst_cycles": 10,
+  "burst_fade_cycles": 2,
+  "burst_level_dbfs": -6.0,
+  "degradation": "time_smoothing",
+  "severity": 0.65,
+  "rng_seed": 0
+}

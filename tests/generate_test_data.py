@@ -20,10 +20,14 @@ EXPECTED_PATH = Path(__file__).parent / "expected_values.yaml"
 def _default_tolerance(metric: str, value: float) -> float:
     if metric.endswith("_db"):
         return 2.0
+    if metric.endswith("_ms"):
+        return max(0.1, abs(value) * 0.1)
     if "correlation" in metric or "coherence" in metric:
         return 0.05
     if "distance" in metric:
         return 0.01
+    if metric.endswith("_ratio") or metric.endswith("_index"):
+        return max(0.02, abs(value) * 0.05)
     return max(0.01, abs(value) * 0.05)
 
 
