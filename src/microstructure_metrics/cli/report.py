@@ -25,12 +25,14 @@ from microstructure_metrics.metrics import (
     NPSResult,
     TFSCorrelationResult,
     THDNResult,
+    TransientResult,
     calculate_delta_se,
     calculate_mps_similarity,
     calculate_narrowband_notch_depth,
     calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
+    calculate_transient_metrics,
 )
 
 DEFAULT_JSON = "metrics_report.json"
@@ -408,6 +410,11 @@ def _calculate_metrics(
         dut=aligned_dut,
         sample_rate=sample_rate,
     )
+    transient = calculate_transient_metrics(
+        reference=aligned_ref,
+        dut=aligned_dut,
+        sample_rate=sample_rate,
+    )
     mps = calculate_mps_similarity(
         reference=aligned_ref,
         dut=aligned_dut,
@@ -434,6 +441,7 @@ def _calculate_metrics(
         "nps": _nps_summary(nps),
         "notch_psd": _notch_psd_summary(notch_psd),
         "delta_se": _delta_se_summary(delta_se),
+        "transient": _transient_summary(transient),
         "mps": _mps_summary(mps),
         "tfs": _tfs_summary(tfs),
     }
@@ -541,6 +549,20 @@ def _tfs_summary(result: TFSCorrelationResult) -> dict[str, object]:
         "group_delay_std_ms": float(result.group_delay_std_ms),
         "band_correlations": band_corr,
         "band_group_delays_ms": group_delays,
+    }
+
+
+def _transient_summary(result: TransientResult) -> dict[str, object]:
+    return {
+        "attack_time_ref_ms": float(result.attack_time_ref_ms),
+        "attack_time_dut_ms": float(result.attack_time_dut_ms),
+        "attack_time_delta_ms": float(result.attack_time_delta_ms),
+        "edge_sharpness_ref": float(result.edge_sharpness_ref),
+        "edge_sharpness_dut": float(result.edge_sharpness_dut),
+        "edge_sharpness_ratio": float(result.edge_sharpness_ratio),
+        "width_ref_ms": float(result.width_ref_ms),
+        "width_dut_ms": float(result.width_dut_ms),
+        "transient_smearing_index": float(result.transient_smearing_index),
     }
 
 

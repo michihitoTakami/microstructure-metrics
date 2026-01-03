@@ -53,7 +53,7 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert json_path.exists()
     payload = json.loads(json_path.read_text())
-    for key in ["thd_n", "nps", "notch_psd", "delta_se", "mps", "tfs"]:
+    for key in ["thd_n", "nps", "notch_psd", "delta_se", "transient", "mps", "tfs"]:
         assert key in payload["metrics"]
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 10
 

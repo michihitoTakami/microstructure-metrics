@@ -26,6 +26,15 @@ edge_rounding_click:
     delta_se_mean:
       expected: 0.02022258242840897
       tolerance: 0.01
+    attack_time_delta_ms:
+      expected: 0.0
+      tolerance: 0.01
+    edge_sharpness_ratio:
+      expected: 0.9131471530989018
+      tolerance: 0.05
+    transient_smearing_index:
+      expected: 1.0
+      tolerance: 0.05
   severity: 0.8
   signal_type: click
 harmonic_distortion:
