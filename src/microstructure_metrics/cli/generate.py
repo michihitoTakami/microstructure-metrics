@@ -9,6 +9,7 @@ import soundfile as sf
 from microstructure_metrics.signals import (
     SUPPORTED_SIGNALS,
     CommonSignalConfig,
+    SignalBuildResult,
     build_signal,
     subtype_for_bit_depth,
 )
@@ -239,7 +240,7 @@ def generate(
             "--centers/複数--q/--notch-cascade-stages は notched-noise 専用です"
         )
 
-    def _write_one(*, result, wav_path: Path) -> None:
+    def _write_one(*, result: SignalBuildResult, wav_path: Path) -> None:
         wav_path.parent.mkdir(parents=True, exist_ok=True)
         sf.write(
             wav_path,
