@@ -16,6 +16,9 @@ SUPPORTED_SIGNALS = (
     "pink-noise",
     "modulated",
     "tfs-tones",
+    "tone-burst",
+    "am-attack",
+    "click",
 )
 
 
@@ -92,6 +95,15 @@ def build_signal(
     min_tone_freq: float = 4000.0,
     tone_count: int = 5,
     tone_step: float = 2000.0,
+    burst_freq: float = 8000.0,
+    burst_cycles: int = 10,
+    burst_level_dbfs: float = -6.0,
+    burst_fade_cycles: int = 2,
+    click_level_dbfs: float = -6.0,
+    click_band_limit_hz: float = 20000.0,
+    attack_ms: float = 2.0,
+    release_ms: float = 10.0,
+    gate_period_ms: float = 100.0,
 ) -> SignalBuildResult:
     """Generate a test signal body + timeline and metadata."""
     normalized_type = signal_type.lower()
@@ -175,6 +187,52 @@ def build_signal(
             "fm_dev_hz": fm_dev,
             "fm_freq_hz": fm_freq or am_freq,
             "target_peak_dbfs": -6.0,
+        }
+    elif normalized_type == "tone-burst":
+        body = _generate_tone_burst(
+            sample_rate=sample_rate,
+            samples=samples,
+            freq_hz=burst_freq,
+            cycles=int(burst_cycles),
+            fade_cycles=int(burst_fade_cycles),
+        )
+        body = _scale_to_dbfs(body, burst_level_dbfs, mode="peak")
+        descriptor = f"{int(burst_freq)}hz_{int(burst_cycles)}cy"
+        extra_meta = {
+            "burst_freq_hz": float(burst_freq),
+            "burst_cycles": int(burst_cycles),
+            "burst_fade_cycles": int(burst_fade_cycles),
+            "burst_level_dbfs": float(burst_level_dbfs),
+        }
+    elif normalized_type == "am-attack":
+        body = _generate_am_attack(
+            sample_rate=sample_rate,
+            samples=samples,
+            carrier_hz=carrier_freq,
+            attack_ms=float(attack_ms),
+            release_ms=float(release_ms),
+            period_ms=float(gate_period_ms),
+        )
+        body = _scale_to_dbfs(body, -6.0, mode="peak")
+        descriptor = f"{int(carrier_freq)}hz_atk{attack_ms}ms"
+        extra_meta = {
+            "carrier_hz": float(carrier_freq),
+            "attack_ms": float(attack_ms),
+            "release_ms": float(release_ms),
+            "gate_period_ms": float(gate_period_ms),
+            "target_peak_dbfs": -6.0,
+        }
+    elif normalized_type == "click":
+        body = _generate_click(
+            sample_rate=sample_rate,
+            samples=samples,
+            band_limit_hz=float(click_band_limit_hz),
+        )
+        body = _scale_to_dbfs(body, click_level_dbfs, mode="peak")
+        descriptor = f"bl{int(click_band_limit_hz)}hz"
+        extra_meta = {
+            "click_level_dbfs": float(click_level_dbfs),
+            "click_band_limit_hz": float(click_band_limit_hz),
         }
     else:  # tfs-tones
         body, freqs = _generate_tfs_tones(
@@ -274,15 +332,84 @@ def _generate_notched_noise(
         raise ValueError("cascade_stages must be >= 1")
     if not centers_hz:
         raise ValueError("centers_hz must not be empty")
+    filtered = base
     for center_hz in centers_hz:
         if not 0 < center_hz < nyquist:
             raise ValueError("Notch center must be within (0, Nyquist)")
-    filtered = base
     for _ in range(cascade_stages):
         for center_hz in centers_hz:
             b, a = signal.iirnotch(w0=float(center_hz) / nyquist, Q=float(q))
             filtered = signal.lfilter(b, a, filtered)
     return _scale_to_dbfs(filtered, -14.0, mode="rms")
+
+
+def _generate_tone_burst(
+    *,
+    sample_rate: int,
+    samples: int,
+    freq_hz: float,
+    cycles: int,
+    fade_cycles: int,
+) -> npt.NDArray[np.float64]:
+    if cycles < 1:
+        raise ValueError("cycles must be >= 1")
+    if fade_cycles < 0:
+        raise ValueError("fade_cycles must be >= 0")
+    burst_samples = int(round((cycles / max(freq_hz, 1e-6)) * sample_rate))
+    burst_samples = max(1, min(burst_samples, samples))
+    t = np.arange(burst_samples) / sample_rate
+    burst = np.sin(2 * np.pi * freq_hz * t)
+    fade_samples = int(round((fade_cycles / max(freq_hz, 1e-6)) * sample_rate))
+    burst = _apply_fade(burst, fade_samples=fade_samples)
+    body = np.zeros(samples, dtype=np.float64)
+    start = max(0, (samples - burst_samples) // 2)
+    body[start : start + burst_samples] = burst
+    return body
+
+
+def _generate_click(
+    *,
+    sample_rate: int,
+    samples: int,
+    band_limit_hz: float,
+) -> npt.NDArray[np.float64]:
+    if samples <= 0:
+        return np.zeros(0, dtype=np.float64)
+    body = np.zeros(samples, dtype=np.float64)
+    body[samples // 2] = 1.0
+    nyquist = sample_rate / 2
+    cutoff = min(max(10.0, band_limit_hz), nyquist * 0.95)
+    sos = signal.butter(4, cutoff / nyquist, btype="low", output="sos")
+    return np.asarray(signal.sosfiltfilt(sos, body), dtype=np.float64)
+
+
+def _generate_am_attack(
+    *,
+    sample_rate: int,
+    samples: int,
+    carrier_hz: float,
+    attack_ms: float,
+    release_ms: float,
+    period_ms: float,
+) -> npt.NDArray[np.float64]:
+    if attack_ms <= 0 or release_ms <= 0 or period_ms <= 0:
+        raise ValueError("attack_ms/release_ms/period_ms must be positive")
+    t = np.arange(samples) / sample_rate
+    carrier = np.sin(2 * np.pi * carrier_hz * t)
+    period_s = period_ms / 1000.0
+    atk_s = attack_ms / 1000.0
+    rel_s = release_ms / 1000.0
+    phase = np.mod(t, period_s)
+    # Gate: off -> attack ramp -> on -> release ramp -> off
+    on_s = max(period_s - atk_s - rel_s, 0.0)
+    env = np.zeros_like(t, dtype=np.float64)
+    atk_mask = phase < atk_s
+    env[atk_mask] = phase[atk_mask] / atk_s
+    on_mask = (phase >= atk_s) & (phase < atk_s + on_s)
+    env[on_mask] = 1.0
+    rel_mask = (phase >= atk_s + on_s) & (phase < atk_s + on_s + rel_s)
+    env[rel_mask] = 1.0 - (phase[rel_mask] - (atk_s + on_s)) / rel_s
+    return env * carrier
 
 
 def _generate_pink_noise(

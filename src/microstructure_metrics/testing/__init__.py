@@ -192,6 +192,16 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         },
         metrics=("mps_correlation", "mps_distance"),
     ),
+    RegressionCase(
+        key="edge_rounding_click",
+        degradation="band_limit",
+        signal_type="click",
+        severity=0.8,
+        duration=1.0,
+        degradation_kwargs={"cutoff_hz": 8000.0},
+        description="band-limited click to emulate rounded transient edges.",
+        metrics=("delta_se_mean", "delta_se_max"),
+    ),
 )
 
 
