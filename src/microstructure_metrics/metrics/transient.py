@@ -87,10 +87,10 @@ def _smoothed_envelope(
     kernel = np.hanning(window)
     kernel_sum = np.sum(kernel)
     if kernel_sum <= 0:
-        return np.abs(signal)
+        return np.abs(signal).astype(np.float64, copy=False)
     kernel = kernel / kernel_sum
     smoothed = np.convolve(energy, kernel, mode="same")
-    return np.sqrt(np.maximum(smoothed, 0.0))
+    return np.asarray(np.sqrt(np.maximum(smoothed, 0.0)), dtype=np.float64)
 
 
 def _extract_features(
