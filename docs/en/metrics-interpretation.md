@@ -36,6 +36,11 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - What: high-band phase coherence and group-delay stability. `mean_correlation` (→1 good), `phase_coherence`, `group_delay_std_ms`.
 - Heuristic: correlation ≥0.85 good; `group_delay_std_ms` > ~0.2 ms indicates notable inter-band delay spread. Check `band_group_delays_ms`.
 
+### Transient / Edge rounding
+- What: rounded edges in impulses/clicks. Keys: `attack_time_ms` (DUT), `attack_time_delta_ms` (DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index` (width ratio).
+- Heuristic: `attack_time_delta_ms` > 0 or `edge_sharpness_ratio` < 1 → slower/rounded edge. `transient_smearing_index` > 1 → wider main lobe (more smearing).
+- Robustness: uses smoothed envelope/energy to tolerate phase jitter and noise.
+
 ## Reading examples
 - “NPS +4 dB, ΔSE +0.03”: notch is filled and entropy degrades—likely dynamic IMD or added noise.
 - “MPS corr 0.75, TFS corr 0.8”: both texture and high-band phase are degraded—could be heavy feedback or bandwidth limits.

@@ -19,6 +19,7 @@ from microstructure_metrics.metrics import (
     calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
+    calculate_transient_metrics,
 )
 from microstructure_metrics.signals import (
     CommonSignalConfig,
@@ -51,6 +52,10 @@ _ALL_METRIC_KEYS = {
     "psd_dut_notch_depth_db",
     "tfs_mean_correlation",
     "tfs_phase_coherence",
+    "attack_time_ms",
+    "attack_time_delta_ms",
+    "edge_sharpness_ratio",
+    "transient_smearing_index",
 }
 
 
@@ -225,7 +230,13 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         duration=1.0,
         degradation_kwargs={"cutoff_hz": 8000.0},
         description="band-limited click to emulate rounded transient edges.",
-        metrics=("delta_se_mean", "delta_se_max"),
+        metrics=(
+            "delta_se_mean",
+            "delta_se_max",
+            "attack_time_delta_ms",
+            "edge_sharpness_ratio",
+            "transient_smearing_index",
+        ),
     ),
 )
 
@@ -616,5 +627,19 @@ def evaluate_metrics(
         )
         results["tfs_mean_correlation"] = tfs.mean_correlation
         results["tfs_phase_coherence"] = tfs.phase_coherence
+
+    if {
+        "attack_time_ms",
+        "attack_time_delta_ms",
+        "edge_sharpness_ratio",
+        "transient_smearing_index",
+    } & requested:
+        transient = calculate_transient_metrics(
+            reference=reference, dut=dut, sample_rate=sample_rate
+        )
+        results["attack_time_ms"] = transient.attack_time_dut_ms
+        results["attack_time_delta_ms"] = transient.attack_time_delta_ms
+        results["edge_sharpness_ratio"] = transient.edge_sharpness_ratio
+        results["transient_smearing_index"] = transient.transient_smearing_index
 
     return {k: v for k, v in results.items() if k in requested}
