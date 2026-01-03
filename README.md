@@ -1,7 +1,7 @@
 # Microstructure Metrics
 
 Human-perception-oriented DAC/AMP microdynamics evaluation suite.
-Provides offline alignment, drift estimation, signal generation, and six metrics (THD+N / NPS / PSD notch depth / ΔSE / MPS / TFS) in one pipeline. (EPIC: [issue #1](https://github.com/michihitoTakami/microstructure-metrics/issues/1))
+Provides offline alignment, drift estimation, signal generation, and six metrics (THD+N / NPS / PSD notch depth / ΔSE / MPS / TFS) in one pipeline.
 
 ## Why this project
 
@@ -20,6 +20,7 @@ Modern DAC/AMPs often exceed 120 dB SINAD, yet steady-state metrics alone cannot
 | Spectral Entropy ΔSE | Information loss / spectral flattening |
 | Modulation Power Spectrum (MPS) | Texture preservation (correlation/distance) |
 | Temporal Fine Structure (TFS) | High-band phase coherence & group-delay stability |
+| Transient / Edge rounding | Edge sharpness vs smearing in clicks/impulses |
 
 ### MPS options (S-09)
 - Log-scale modulation grid (`mod_scale="log"`, `num_mod_bins`).
