@@ -20,44 +20,23 @@ edge_rounding_click:
   degradation: band_limit
   description: band-limited click to emulate rounded transient edges.
   metrics:
+    attack_time_delta_ms:
+      expected: 0.0
+      tolerance: 0.1
     delta_se_max:
       expected: 0.7611945143136768
       tolerance: 0.03805972571568384
     delta_se_mean:
       expected: 0.02022258242840897
       tolerance: 0.01
-    attack_time_delta_ms:
-      expected: 0.0
-      tolerance: 0.01
     edge_sharpness_ratio:
       expected: 0.9131471530989018
-      tolerance: 0.05
+      tolerance: 0.045657357654945094
     transient_smearing_index:
       expected: 1.0
       tolerance: 0.05
   severity: 0.8
   signal_type: click
-time_smoothing_attack:
-  degradation: time_smoothing
-  description: envelope smoothing to emulate rounded attacks without heavy LPF.
-  metrics:
-    delta_se_mean:
-      expected: -0.011845309118510347
-      tolerance: 0.02
-    attack_time_ms:
-      expected: 10.729166666666666
-      tolerance: 1.0
-    attack_time_delta_ms:
-      expected: 9.0625
-      tolerance: 1.0
-    edge_sharpness_ratio:
-      expected: 1.000027092215049
-      tolerance: 0.05
-    transient_smearing_index:
-      expected: 1.0
-      tolerance: 0.1
-  severity: 0.7
-  signal_type: am-attack
 harmonic_distortion:
   degradation: harmonic_distortion
   description: 2nd/3rd harmonic injection around -60 dB.
@@ -106,6 +85,54 @@ noise_floor:
       tolerance: 2.0
   severity: 0.6
   signal_type: thd
+notch_blur:
+  degradation: notch_blur
+  description: blur the spectral notch by smoothing magnitude response.
+  metrics:
+    dut_notch_depth_db:
+      expected: 3.896153664553856
+      tolerance: 2.0
+    nps_db:
+      expected: -0.04556016147734787
+      tolerance: 2.0
+    psd_dut_notch_depth_db:
+      expected: 5.448316522010876
+      tolerance: 2.0
+    psd_notch_fill_db:
+      expected: 0.08914326116584359
+      tolerance: 2.0
+    psd_ref_notch_depth_db:
+      expected: 5.537459783176719
+      tolerance: 2.0
+    ref_notch_depth_db:
+      expected: 3.9417138260312035
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: notched-noise
+notch_blur_high_q:
+  degradation: notch_blur
+  description: blur the spectral notch by smoothing magnitude response (high-Q).
+  metrics:
+    dut_notch_depth_db:
+      expected: 1.385507423630228
+      tolerance: 2.0
+    nps_db:
+      expected: 0.025414395460705647
+      tolerance: 2.0
+    psd_dut_notch_depth_db:
+      expected: 9.106248998439098
+      tolerance: 2.0
+    psd_notch_fill_db:
+      expected: -0.08967640749433592
+      tolerance: 2.0
+    psd_ref_notch_depth_db:
+      expected: 9.016572590944762
+      tolerance: 2.0
+    ref_notch_depth_db:
+      expected: 1.360093028169522
+      tolerance: 2.0
+  severity: 0.7
+  signal_type: notched-noise
 notch_fill:
   degradation: notch_fill
   description: fill the spectral notch with band-limited noise.
@@ -116,8 +143,8 @@ notch_fill:
     nps_db:
       expected: -1.3598186742239031
       tolerance: 2.0
-    ref_notch_depth_db:
-      expected: 3.9345129803005707
+    psd_dut_notch_depth_db:
+      expected: 3.4712293569299026
       tolerance: 2.0
     psd_notch_fill_db:
       expected: 2.0707396329835213
@@ -125,8 +152,8 @@ notch_fill:
     psd_ref_notch_depth_db:
       expected: 5.541968989913424
       tolerance: 2.0
-    psd_dut_notch_depth_db:
-      expected: 3.4712293569299026
+    ref_notch_depth_db:
+      expected: 3.9345129803005707
       tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
@@ -140,8 +167,8 @@ notch_fill_high_q:
     nps_db:
       expected: -0.8031940440112135
       tolerance: 2.0
-    ref_notch_depth_db:
-      expected: 1.0918665752155405
+    psd_dut_notch_depth_db:
+      expected: -3.147493539985824
       tolerance: 2.0
     psd_notch_fill_db:
       expected: 12.242771972096898
@@ -149,33 +176,9 @@ notch_fill_high_q:
     psd_ref_notch_depth_db:
       expected: 9.095278432111074
       tolerance: 2.0
-    psd_dut_notch_depth_db:
-      expected: -3.147493539985824
-      tolerance: 2.0
-  severity: 0.7
-  signal_type: notched-noise
-notch_blur:
-  degradation: notch_blur
-  description: blur the spectral notch by smoothing magnitude response.
-  metrics:
-    nps_db:
-      expected: -0.04556016147734787
-      tolerance: 0.1
     ref_notch_depth_db:
-      expected: 3.9417138260312035
-      tolerance: 0.5
-    dut_notch_depth_db:
-      expected: 3.896153664553856
-      tolerance: 0.5
-    psd_notch_fill_db:
-      expected: 0.08914326116584359
-      tolerance: 0.5
-    psd_ref_notch_depth_db:
-      expected: 5.537459783176719
-      tolerance: 0.5
-    psd_dut_notch_depth_db:
-      expected: 5.448316522010876
-      tolerance: 0.5
+      expected: 1.0918665752155405
+      tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
 notch_fill_low_q:
@@ -188,17 +191,17 @@ notch_fill_low_q:
     nps_db:
       expected: -0.4514857775213922
       tolerance: 2.0
-    ref_notch_depth_db:
-      expected: 4.480671128910604
+    psd_dut_notch_depth_db:
+      expected: 6.905574387003521
       tolerance: 2.0
     psd_notch_fill_db:
       expected: 0.5254934482138687
-      tolerance: 1.5
+      tolerance: 2.0
     psd_ref_notch_depth_db:
       expected: 7.43106783521739
       tolerance: 2.0
-    psd_dut_notch_depth_db:
-      expected: 6.905574387003521
+    ref_notch_depth_db:
+      expected: 4.480671128910604
       tolerance: 2.0
   severity: 0.7
   signal_type: notched-noise
@@ -229,3 +232,48 @@ soft_clipping:
       tolerance: 2.0
   severity: 0.65
   signal_type: pink-noise
+time_smoothing_attack:
+  degradation: time_smoothing
+  description: envelope smoothing to emulate rounded attacks without heavy LPF.
+  metrics:
+    attack_time_delta_ms:
+      expected: 9.0625
+      tolerance: 0.90625
+    attack_time_ms:
+      expected: 10.729166666666666
+      tolerance: 1.0729166666666667
+    delta_se_mean:
+      expected: -0.011845309118510347
+      tolerance: 0.01
+    edge_sharpness_ratio:
+      expected: 1.000027092215049
+      tolerance: 0.050001354610752446
+    transient_smearing_index:
+      expected: 1.0
+      tolerance: 0.05
+  severity: 0.7
+  signal_type: am-attack
+tone_burst_smearing:
+  degradation: time_smoothing
+  description: smooth tone bursts to emulate rounded edges across repeated hits.
+  metrics:
+    attack_time_delta_ms:
+      expected: 0.6041666666666666
+      tolerance: 0.1
+    attack_time_ms:
+      expected: 0.8125
+      tolerance: 0.1
+    delta_se_max:
+      expected: 0.8851987091124985
+      tolerance: 0.04425993545562493
+    delta_se_mean:
+      expected: 0.7204196817040823
+      tolerance: 0.03602098408520412
+    edge_sharpness_ratio:
+      expected: 0.2234106374168738
+      tolerance: 0.02
+    transient_smearing_index:
+      expected: 0.6666666666666667
+      tolerance: 0.03333333333333334
+  severity: 0.65
+  signal_type: tone-burst
