@@ -14,6 +14,23 @@ from microstructure_metrics.signals import (
 )
 
 
+def _parse_float_list(text: str) -> list[float]:
+    parts = [p.strip() for p in text.replace(" ", ",").split(",")]
+    values: list[float] = []
+    for part in parts:
+        if not part:
+            continue
+        try:
+            values.append(float(part))
+        except ValueError as exc:
+            raise click.ClickException(
+                f"数値リストの解析に失敗しました: {text}"
+            ) from exc
+    if not values:
+        raise click.ClickException("--centers は空にできません")
+    return values
+
+
 @click.command(name="generate")
 @click.argument(
     "signal_type", type=click.Choice(SUPPORTED_SIGNALS, case_sensitive=False)
@@ -78,11 +95,24 @@ from microstructure_metrics.signals import (
     help="ノッチ中心周波数 (Hz)",
 )
 @click.option(
+    "--centers",
+    default=None,
+    help='ノッチ中心周波数のリスト(Hz)。例: "3000,5000,7000,9000"',
+)
+@click.option(
     "--q",
-    default=8.6,
-    show_default=True,
+    multiple=True,
+    default=(8.6,),
+    show_default=True,  # click will show '(8.6,)' but keeps backward-compat in usage
     type=click.FloatRange(min=0.1),
-    help="ノッチQ値",
+    help="ノッチQ値（複数指定するとQスイープとして複数ファイルを生成）",
+)
+@click.option(
+    "--notch-cascade-stages",
+    default=1,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="ノッチフィルタのカスケード段数（ノッチ強化）",
 )
 @click.option(
     "--lowcut",
@@ -171,7 +201,9 @@ def generate(
     freq: float,
     level_dbfs: float,
     center: float,
-    q: float,
+    centers: str | None,
+    q: tuple[float, ...],
+    notch_cascade_stages: int,
     lowcut: float,
     highcut: float,
     carrier: float,
@@ -195,13 +227,78 @@ def generate(
         silence_duration_ms=silence_duration,
     )
 
+    normalized_type = signal_type.lower()
+    q_values = q or (8.6,)
+    centers_list = _parse_float_list(centers) if centers else [float(center)]
+
+    # Guard: options below only make sense for notched-noise.
+    if normalized_type != "notched-noise" and (
+        centers is not None or len(q_values) > 1 or notch_cascade_stages != 1
+    ):
+        raise click.ClickException(
+            "--centers/複数--q/--notch-cascade-stages は notched-noise 専用です"
+        )
+
+    def _write_one(*, result, wav_path: Path) -> None:
+        wav_path.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(
+            wav_path,
+            result.data,
+            samplerate=common.sample_rate,
+            subtype=subtype_for_bit_depth(common.normalized_bit_depth()),
+        )
+        click.echo(f"WAVを書き出しました: {wav_path}")
+        if with_metadata:
+            metadata_path = wav_path.with_suffix(".json")
+            metadata_path.write_text(
+                json.dumps(result.metadata, ensure_ascii=False, indent=2)
+            )
+            click.echo(f"メタデータを書き出しました: {metadata_path}")
+
+    # Q sweep: generate multiple files when multiple --q is provided for notched-noise.
+    if normalized_type == "notched-noise" and len(q_values) > 1:
+        out_base = Path(output) if output else Path(".")
+        if out_base.suffix.lower() == ".wav":
+            raise click.ClickException(
+                "複数Qを生成する場合、--output は .wav ではなくディレクトリを指定してください"
+            )
+        out_base.mkdir(parents=True, exist_ok=True)
+        for q_value in q_values:
+            result = build_signal(
+                signal_type,
+                common=common,
+                tone_freq=freq,
+                tone_level_dbfs=level_dbfs,
+                notch_center=center,
+                notch_centers_hz=centers_list,
+                notch_q=float(q_value),
+                notch_cascade_stages=notch_cascade_stages,
+                noise_lowcut=lowcut,
+                noise_highcut=highcut,
+                am_freq=am_freq,
+                am_depth=am_depth,
+                fm_dev=fm_dev,
+                fm_freq=fm_freq,
+                carrier_freq=carrier,
+                min_tone_freq=min_freq,
+                tone_count=tone_count,
+                tone_step=tone_step,
+            )
+            wav_path = out_base / f"{result.suggested_stem}.wav"
+            _write_one(result=result, wav_path=wav_path)
+        return
+
+    # Single output
+    chosen_q = float(q_values[0])
     result = build_signal(
         signal_type,
         common=common,
         tone_freq=freq,
         tone_level_dbfs=level_dbfs,
         notch_center=center,
-        notch_q=q,
+        notch_centers_hz=centers_list if centers else None,
+        notch_q=chosen_q,
+        notch_cascade_stages=notch_cascade_stages,
         noise_lowcut=lowcut,
         noise_highcut=highcut,
         am_freq=am_freq,
@@ -213,21 +310,5 @@ def generate(
         tone_count=tone_count,
         tone_step=tone_step,
     )
-
     wav_path = Path(output) if output else Path(f"{result.suggested_stem}.wav")
-    wav_path.parent.mkdir(parents=True, exist_ok=True)
-
-    sf.write(
-        wav_path,
-        result.data,
-        samplerate=common.sample_rate,
-        subtype=subtype_for_bit_depth(common.normalized_bit_depth()),
-    )
-    click.echo(f"WAVを書き出しました: {wav_path}")
-
-    if with_metadata:
-        metadata_path = wav_path.with_suffix(".json")
-        metadata_path.write_text(
-            json.dumps(result.metadata, ensure_ascii=False, indent=2)
-        )
-        click.echo(f"メタデータを書き出しました: {metadata_path}")
+    _write_one(result=result, wav_path=wav_path)

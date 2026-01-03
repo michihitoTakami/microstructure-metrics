@@ -9,10 +9,14 @@
   "pilot_level_dbfs": -6.0,
   "lead_silence_ms": 500,
   "tail_silence_ms": 500,
-  "created_at": "2026-01-01T18:53:15.010657+00:00",
+  "created_at": "2000-01-01T00:00:00+00:00",
   "version": "1.0.0",
   "notch_center_hz": 8000.0,
+  "notch_centers_hz": [
+    8000.0
+  ],
   "notch_q": 8.6,
+  "notch_cascade_stages": 1,
   "noise_color": "pink",
   "noise_lowcut_hz": 20.0,
   "noise_highcut_hz": 20000.0,

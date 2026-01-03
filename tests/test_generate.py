@@ -236,6 +236,65 @@ def test_notched_noise_has_attenuation(
     assert attenuation_db >= 10.0  # at least 10 dB attenuation at the notch
 
 
+def test_generate_notched_noise_multi_centers_and_cascade_metadata(
+    tmp_path: Path,
+) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / "multi_notch.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "notched-noise",
+            "--duration",
+            "0.2",
+            "--centers",
+            "3000,5000,7000,9000",
+            "--q",
+            "8.6",
+            "--notch-cascade-stages",
+            "2",
+            "--output",
+            str(wav_path),
+            "--with-metadata",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    meta_path = wav_path.with_suffix(".json")
+    assert meta_path.exists()
+    payload = meta_path.read_text()
+    assert '"notch_centers_hz"' in payload
+    assert '"notch_cascade_stages": 2' in payload
+
+
+def test_generate_notched_noise_q_sweep_creates_multiple_files(tmp_path: Path) -> None:
+    runner = CliRunner()
+    out_dir = tmp_path / "q_sweep"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "notched-noise",
+            "--duration",
+            "0.15",
+            "--center",
+            "8000",
+            "--q",
+            "2",
+            "--q",
+            "8.6",
+            "--output",
+            str(out_dir),
+            "--with-metadata",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    wavs = sorted(out_dir.glob("*.wav"))
+    jsons = sorted(out_dir.glob("*.json"))
+    assert len(wavs) == 2
+    assert len(jsons) == 2
+
+
 def test_pink_noise_spectral_slope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
