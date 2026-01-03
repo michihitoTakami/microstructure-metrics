@@ -135,8 +135,8 @@ def calculate_narrowband_notch_depth(
 
 
 def _power_to_db(power: float) -> float:
-    return 10.0 * np.log10(max(power, EPS))
+    return float(10.0 * np.log10(max(power, EPS)))
 
 
 def _ratio_to_db(ratio: float) -> float:
-    return 10.0 * np.log10(max(ratio, EPS))
+    return float(10.0 * np.log10(max(ratio, EPS)))
