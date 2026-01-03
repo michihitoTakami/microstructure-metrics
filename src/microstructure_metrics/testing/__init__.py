@@ -132,6 +132,19 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
     ),
     RegressionCase(
+        key="notch_fill_low_q",
+        degradation="notch_fill",
+        signal_type="notched-noise",
+        severity=0.7,
+        duration=1.2,
+        rng_seed=1,
+        signal_kwargs={
+            "notch_q": 2.0,
+        },
+        description="fill the spectral notch with band-limited noise (low-Q notch).",
+        metrics=("nps_db", "dut_notch_depth_db", "ref_notch_depth_db"),
+    ),
+    RegressionCase(
         key="notch_fill_high_q",
         degradation="notch_fill",
         signal_type="notched-noise",

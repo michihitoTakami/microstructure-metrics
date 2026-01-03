@@ -31,7 +31,7 @@ Scope: define test signal structure, file/metadata formats, and naming rules for
 
 Examples:
 thd_1khz_48000_24bit_v1.wav
-notched_noise_8khz_q86_48000_24bit_v1.wav
+notched_noise_8000hz_q8.6_48000_24bit_v1.wav
 pink_noise_48000_24bit_v1.wav
 ```
 - `signal_type`: thd, notched_noise, pink_noise, mps, tfs, etc.
@@ -59,7 +59,9 @@ pink_noise_48000_24bit_v1.wav
   "lead_silence_ms": 500,
   "tail_silence_ms": 500,
   "notch_center_hz": 8000,
+  "notch_centers_hz": [8000],
   "notch_q": 8.6,
+  "notch_cascade_stages": 1,
   "noise_color": "pink",
   "created_at": "2026-01-01T00:00:00Z",
   "version": "1.0.0"
