@@ -36,7 +36,12 @@ def save_mps_delta_heatmap(
         mesh = ax.pcolormesh(
             _axis_edges(mod_freqs),
             _axis_edges(audio_freqs),
-            np.nan_to_num(delta_db, nan=0.0),
+            np.nan_to_num(
+                delta_db,
+                nan=0.0,
+                posinf=max_abs,
+                neginf=-max_abs,
+            ),
             shading="auto",
             cmap="coolwarm",
             vmin=-max_abs,
