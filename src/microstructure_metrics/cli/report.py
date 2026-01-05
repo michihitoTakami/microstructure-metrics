@@ -157,6 +157,20 @@ class CalculatedMetrics:
     ),
 )
 @click.option(
+    "--transient-smoothing-ms",
+    type=click.FloatRange(min=0.0),
+    default=0.05,
+    show_default=True,
+    help="Transient包絡の平滑化時間(ms)。0でヒルベルト包絡(無平滑)",
+)
+@click.option(
+    "--transient-asymmetry-window-ms",
+    type=click.FloatRange(min=0.1),
+    default=3.0,
+    show_default=True,
+    help="Pre-energy/Skewness計算に使うピーク周辺半窓(±ms)",
+)
+@click.option(
     "--mps-filterbank",
     type=click.Choice(["gammatone", "mel"]),
     default="gammatone",
@@ -258,6 +272,8 @@ def report(
     max_lag_ms: float,
     fundamental_freq: float,
     expected_level_dbfs: float | None,
+    transient_smoothing_ms: float,
+    transient_asymmetry_window_ms: float,
     mps_filterbank: str,
     mps_filterbank_order: int,
     mps_filterbank_bandwidth_scale: float,
@@ -328,6 +344,8 @@ def report(
         sample_rate=sample_rate,
         fundamental_freq=fundamental_freq,
         expected_level_dbfs=expected_level_dbfs,
+        transient_smoothing_ms=transient_smoothing_ms,
+        transient_asymmetry_window_ms=transient_asymmetry_window_ms,
         mps_filterbank=mps_filterbank,
         mps_filterbank_kwargs={
             "order": mps_filterbank_order,
@@ -403,6 +421,8 @@ def _calculate_metrics(
     sample_rate: int,
     fundamental_freq: float,
     expected_level_dbfs: float | None,
+    transient_smoothing_ms: float,
+    transient_asymmetry_window_ms: float,
     mps_filterbank: str,
     mps_filterbank_kwargs: dict[str, float | int | None],
     mps_envelope_method: str,
@@ -426,6 +446,8 @@ def _calculate_metrics(
         reference=aligned_ref,
         dut=aligned_dut,
         sample_rate=sample_rate,
+        smoothing_ms=transient_smoothing_ms,
+        asymmetry_window_ms=transient_asymmetry_window_ms,
     )
     mps = calculate_mps_similarity(
         reference=aligned_ref,
@@ -555,6 +577,12 @@ def _tfs_summary(result: TFSCorrelationResult) -> dict[str, object]:
 
 def _transient_summary(result: TransientResult) -> dict[str, object]:
     return {
+        "low_level_attack_time_ref_ms": float(result.low_level_attack_time_ref_ms),
+        "low_level_attack_time_dut_ms": float(result.low_level_attack_time_dut_ms),
+        "low_level_attack_time_delta_ms": float(result.low_level_attack_time_delta_ms),
+        "low_level_attack_time_delta_p95_ms": float(
+            result.low_level_attack_time_delta_stats_ms.percentile_95
+        ),
         "attack_time_ref_ms": float(result.attack_time_ref_ms),
         "attack_time_dut_ms": float(result.attack_time_dut_ms),
         "attack_time_delta_ms": float(result.attack_time_delta_ms),
@@ -574,6 +602,18 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
         "width_dut_ms": float(result.width_dut_ms),
         "transient_smearing_index": float(result.transient_smearing_index),
         "transient_smearing_index_p95": float(result.width_ratio_stats.percentile_95),
+        "pre_energy_fraction_ref": float(result.pre_energy_fraction_ref),
+        "pre_energy_fraction_dut": float(result.pre_energy_fraction_dut),
+        "pre_energy_fraction_delta": float(result.pre_energy_fraction_delta),
+        "pre_energy_fraction_delta_p95": float(
+            result.pre_energy_fraction_delta_stats.percentile_95
+        ),
+        "energy_skewness_ref": float(result.energy_skewness_ref),
+        "energy_skewness_dut": float(result.energy_skewness_dut),
+        "energy_skewness_delta": float(result.energy_skewness_delta),
+        "energy_skewness_delta_p95": float(
+            result.energy_skewness_delta_stats.percentile_95
+        ),
         "event_counts": {
             "ref": len(result.ref_events),
             "dut": len(result.dut_events),
@@ -588,6 +628,7 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
             "match_tolerance_ms": float(result.params.match_tolerance_ms),
             "max_event_duration_ms": float(result.params.max_event_duration_ms),
             "width_fraction": float(result.params.width_fraction),
+            "asymmetry_window_ms": float(result.params.asymmetry_window_ms),
         },
     }
 

@@ -51,6 +51,10 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
             str(plot_dir),
             "--expected-level-dbfs",
             "-6",
+            "--transient-smoothing-ms",
+            "0",
+            "--transient-asymmetry-window-ms",
+            "2.0",
         ],
     )
 
@@ -70,6 +74,16 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
         "envelope_threshold_db",
     ]:
         assert key in tfs_payload
+    transient_payload = payload["metrics"]["transient"]
+    for key in [
+        "low_level_attack_time_delta_ms",
+        "pre_energy_fraction_dut",
+        "energy_skewness_dut",
+        "params",
+    ]:
+        assert key in transient_payload
+    assert transient_payload["params"]["smoothing_ms"] == 0.0
+    assert transient_payload["params"]["asymmetry_window_ms"] == 2.0
     assert tfs_payload["frames_per_band"] > 0
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 10
     assert "plots" in payload
