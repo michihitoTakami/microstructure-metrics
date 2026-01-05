@@ -31,6 +31,7 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     json_path = tmp_path / "report.json"
     csv_path = tmp_path / "report.csv"
     md_path = tmp_path / "report.md"
+    plot_dir = tmp_path / "plots"
 
     runner = CliRunner()
     result = runner.invoke(
@@ -45,6 +46,9 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
             str(csv_path),
             "--output-md",
             str(md_path),
+            "--plot",
+            "--plot-dir",
+            str(plot_dir),
             "--expected-level-dbfs",
             "-6",
         ],
@@ -68,12 +72,19 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
         assert key in tfs_payload
     assert tfs_payload["frames_per_band"] > 0
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 10
+    assert "plots" in payload
+    plots = payload["plots"]
+    assert Path(plots["mps_delta_heatmap"]).exists()
+    assert Path(plots["tfs_correlation_timeseries"]).exists()
+    assert plot_dir.exists()
 
     assert csv_path.exists()
     csv_body = csv_path.read_text()
     assert "thd_n" in csv_body
     assert md_path.exists()
-    assert "Microstructure Metrics Report" in md_path.read_text()
+    md_body = md_path.read_text()
+    assert "Microstructure Metrics Report" in md_body
+    assert "PLOTS" in md_body
 
 
 def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:

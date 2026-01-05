@@ -35,12 +35,16 @@ class TFSCorrelationResult:
     phase_coherence: float
     group_delay_std_ms: float
     band_group_delays_ms: dict[tuple[float, float], float]
+    freq_bands: tuple[tuple[float, float], ...]
     frame_length_ms: float
     frame_hop_ms: float
     max_lag_ms: float
     envelope_threshold_db: float
     frames_per_band: int
     used_frames: int
+    frame_times_ms: npt.NDArray[np.float64]
+    correlation_series: npt.NDArray[np.float64]
+    correlation_weights: npt.NDArray[np.float64]
 
 
 def extract_tfs(
@@ -135,22 +139,36 @@ def calculate_tfs_correlation(
     max_lag_samples = int(round(max_lag_ms * sample_rate / 1000))
     if frame_length_samples < 1 or hop_samples < 1:
         raise ValueError("frame_length_ms/hop_ms too small for given sample_rate")
-    if frame_length_samples > ref.size:
-        frame_length_samples = ref.size
+    signal_length = ref.size
+    if frame_length_samples > signal_length:
+        frame_length_samples = signal_length
     if frame_length_samples < hop_samples:
         hop_samples = frame_length_samples
-    frames_per_band = _frame_count(ref.size, frame_length_samples, hop_samples)
+    frame_starts = list(range(0, signal_length - frame_length_samples + 1, hop_samples))
+    frames_per_band = len(frame_starts)
     window_taper = _window(window, frame_length_samples)
+    frame_times_ms = np.asarray(
+        [
+            (start + frame_length_samples / 2) * 1000 / sample_rate
+            for start in frame_starts
+        ],
+        dtype=np.float64,
+    )
 
     band_correlations: dict[tuple[float, float], float] = {}
     band_group_delays_ms: dict[tuple[float, float], float] = {}
+    bands_tuple = tuple((float(low), float(high)) for low, high in bands)
+    correlation_series = np.full(
+        (len(bands_tuple), frames_per_band), np.nan, dtype=np.float64
+    )
+    correlation_weights = np.zeros_like(correlation_series, dtype=np.float64)
     phase_vector_sum = 0.0 + 0.0j
     phase_count = 0
     all_correlations: list[float] = []
     all_weights: list[float] = []
     used_frames = 0
 
-    for low, high in bands:
+    for band_index, (low, high) in enumerate(bands_tuple):
         if low <= 0 or high <= low:
             raise ValueError("freq_bands must be increasing (low, high) tuples")
         if high >= nyquist:
@@ -175,18 +193,26 @@ def calculate_tfs_correlation(
             dut_envelope=components_dut.envelope,
             threshold_db=envelope_threshold_db,
         )
-        correlations, lags, weights = _short_time_correlations(
+        (
+            correlations,
+            lags,
+            weights,
+            frame_series,
+            frame_weights,
+        ) = _short_time_correlations(
             ref_fine=components_ref.fine_structure,
             dut_fine=components_dut.fine_structure,
             ref_envelope=components_ref.envelope,
             dut_envelope=components_dut.envelope,
             window=window_taper,
             frame_length=frame_length_samples,
-            hop=hop_samples,
             max_lag=max_lag_samples,
             envelope_threshold=band_threshold,
+            frame_starts=frame_starts,
         )
         used_frames += len(correlations)
+        correlation_series[band_index] = frame_series
+        correlation_weights[band_index] = frame_weights
         band_key = (float(low), float(high))
         if correlations:
             band_mean = float(np.average(correlations, weights=weights))
@@ -241,12 +267,16 @@ def calculate_tfs_correlation(
         phase_coherence=phase_coherence,
         group_delay_std_ms=group_delay_std_ms,
         band_group_delays_ms=band_group_delays_ms,
+        freq_bands=bands_tuple,
         frame_length_ms=float(frame_length_samples * 1000 / sample_rate),
         frame_hop_ms=float(hop_samples * 1000 / sample_rate),
         max_lag_ms=float(max_lag_samples * 1000 / sample_rate),
         envelope_threshold_db=float(envelope_threshold_db),
         frames_per_band=int(frames_per_band),
         used_frames=int(used_frames),
+        frame_times_ms=frame_times_ms,
+        correlation_series=correlation_series,
+        correlation_weights=correlation_weights,
     )
 
 
@@ -333,16 +363,6 @@ def _overlap_with_lag(
     return a[:-shift], b[shift:]
 
 
-def _frame_count(length: int, frame_length: int, hop: int) -> int:
-    if length <= 0:
-        return 0
-    if frame_length <= 0 or hop <= 0:
-        raise ValueError("frame_length and hop must be positive")
-    if length < frame_length:
-        return 1
-    return 1 + (length - frame_length) // hop
-
-
 def _envelope_threshold(
     *,
     ref_envelope: npt.NDArray[np.float64],
@@ -373,10 +393,16 @@ def _short_time_correlations(
     dut_envelope: npt.NDArray[np.float64],
     window: npt.NDArray[np.float64],
     frame_length: int,
-    hop: int,
     max_lag: int,
     envelope_threshold: float,
-) -> tuple[list[float], list[int], list[float]]:
+    frame_starts: list[int],
+) -> tuple[
+    list[float],
+    list[int],
+    list[float],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
     if (
         ref_fine.shape != dut_fine.shape
         or ref_envelope.shape != dut_envelope.shape
@@ -386,17 +412,21 @@ def _short_time_correlations(
     correlations: list[float] = []
     lags: list[int] = []
     weights: list[float] = []
-    if frame_length < 1 or hop < 1:
-        return correlations, lags, weights
+    empty_series = np.asarray([], dtype=np.float64)
+    if frame_length < 1:
+        return correlations, lags, weights, empty_series, empty_series
 
     signal_length = ref_fine.size
-    if signal_length < frame_length:
-        frame_length = signal_length
-    if frame_length == 0:
-        return correlations, lags, weights
+    if signal_length == 0 or not frame_starts:
+        return correlations, lags, weights, empty_series, empty_series
 
-    for start in range(0, signal_length - frame_length + 1, hop):
+    series = np.full(len(frame_starts), np.nan, dtype=np.float64)
+    weight_series = np.zeros(len(frame_starts), dtype=np.float64)
+
+    for frame_index, start in enumerate(frame_starts):
         stop = start + frame_length
+        if stop > signal_length:
+            break
         env_mean = float(
             np.mean(
                 0.5 * (ref_envelope[start:stop] + dut_envelope[start:stop]),
@@ -411,8 +441,10 @@ def _short_time_correlations(
         correlations.append(corr)
         lags.append(lag)
         weights.append(env_mean)
+        series[frame_index] = corr
+        weight_series[frame_index] = env_mean
 
-    return correlations, lags, weights
+    return correlations, lags, weights, series, weight_series
 
 
 def _weighted_median(values: npt.NDArray[np.float64], weights: list[float]) -> float:
