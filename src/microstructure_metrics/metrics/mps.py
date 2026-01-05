@@ -17,7 +17,6 @@ EPS: Final = 1e-12
 class MPSResult:
     """変調パワースペクトラム(MPS)計算結果。"""
 
-    mps_matrix: npt.NDArray[np.float64]
     mps_power: npt.NDArray[np.float64]
     mps_db: npt.NDArray[np.float64]
     audio_freqs: npt.NDArray[np.float64]
@@ -32,8 +31,10 @@ class MPSSimilarityResult:
     mps_distance: float
     mps_distance_weighted: float
     band_correlations: dict[float, float]
-    ref_mps: npt.NDArray[np.float64]
-    dut_mps: npt.NDArray[np.float64]
+    ref_mps_power: npt.NDArray[np.float64]
+    ref_mps_db: npt.NDArray[np.float64]
+    dut_mps_power: npt.NDArray[np.float64]
+    dut_mps_db: npt.NDArray[np.float64]
     delta_mps_db: npt.NDArray[np.float64]
     mod_weights: npt.NDArray[np.float64]
     mod_weighting: Literal["none", "high_mod"]
@@ -179,10 +180,8 @@ def calculate_mps(
         mod_axis = log_freqs
 
     mps_db = _power_to_db(mps_power)
-    mps_matrix = mps_db if mps_scale == "log" else mps_power
 
     return MPSResult(
-        mps_matrix=np.asarray(mps_matrix, dtype=np.float64),
         mps_power=np.asarray(mps_power, dtype=np.float64),
         mps_db=np.asarray(mps_db, dtype=np.float64),
         audio_freqs=np.asarray(fb.center_frequencies, dtype=np.float64),
@@ -262,8 +261,11 @@ def calculate_mps_similarity(
         explicit_weights=band_weights,
         reference_mps=ref_result.mps_power,
     )
-    ref_weighted = _apply_band_weights(ref_result.mps_matrix, weights)
-    dut_weighted = _apply_band_weights(dut_result.mps_matrix, weights)
+    ref_base = ref_result.mps_db if mps_scale == "log" else ref_result.mps_power
+    dut_base = dut_result.mps_db if mps_scale == "log" else dut_result.mps_power
+
+    ref_weighted = _apply_band_weights(ref_base, weights)
+    dut_weighted = _apply_band_weights(dut_base, weights)
 
     ref_norm = _normalize_mps(ref_weighted, mode=mps_norm)
     dut_norm = _normalize_mps(dut_weighted, mode=mps_norm)
@@ -291,8 +293,10 @@ def calculate_mps_similarity(
         mps_distance=mps_distance,
         mps_distance_weighted=mps_distance_weighted,
         band_correlations=band_correlations,
-        ref_mps=ref_result.mps_matrix,
-        dut_mps=dut_result.mps_matrix,
+        ref_mps_power=ref_result.mps_power,
+        ref_mps_db=ref_result.mps_db,
+        dut_mps_power=dut_result.mps_power,
+        dut_mps_db=dut_result.mps_db,
         delta_mps_db=np.asarray(
             ref_result.mps_db - dut_result.mps_db, dtype=np.float64
         ),

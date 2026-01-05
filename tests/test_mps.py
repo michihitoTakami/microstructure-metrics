@@ -60,10 +60,10 @@ def test_mps_detects_am_modulation_peak() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    band_mps = result.mps_matrix[band_idx]
+    band_mps = result.mps_power[band_idx]
     peak_mod_freq = float(result.mod_freqs[int(np.argmax(band_mps))])
 
-    assert result.mps_matrix.shape[0] == 48
+    assert result.mps_power.shape[0] == 48
     assert abs(peak_mod_freq - mod) <= 1.0
 
 
@@ -172,10 +172,10 @@ def test_mps_supports_log_modulation_axis() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - 1200.0)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
     log_steps = np.diff(np.log(result.mod_freqs))
 
-    assert result.mps_matrix.shape[1] == 24
+    assert result.mps_power.shape[1] == 24
     assert abs(peak_mod - mod) <= 1.0
     assert np.allclose(log_steps, np.mean(log_steps), atol=1e-2)
 
@@ -195,8 +195,8 @@ def test_mps_mel_filterbank_runs() -> None:
         filterbank_kwargs={"order": 6},
     )
 
-    assert result.mps_matrix.shape[0] == 32
-    assert np.all(np.isfinite(result.mps_matrix))
+    assert result.mps_power.shape[0] == 32
+    assert np.all(np.isfinite(result.mps_power))
     diffs = np.diff(result.audio_freqs)
     assert np.all(diffs <= 0)
 
@@ -220,7 +220,7 @@ def test_mps_rectify_envelope_detects_modulation() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
     assert abs(peak_mod - mod) <= 1.0
 
 
@@ -294,6 +294,6 @@ def test_mps_handles_am_fm_composite_on_log_grid() -> None:
         mod_scale="log",
     )
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
 
     assert abs(peak_mod - am) <= 1.0
