@@ -350,7 +350,7 @@ def report(
     json_path.parent.mkdir(parents=True, exist_ok=True)
 
     plot_enabled = plot or plot_dir is not None
-    plot_payload: dict[str, object] | None = None
+    plot_payload: dict[str, str] | None = None
     if plot_enabled:
         resolved_plot_dir = (
             Path(plot_dir)
