@@ -52,9 +52,12 @@ def test_tfs_correlation_high_for_identical_signals() -> None:
     )
 
     assert result.mean_correlation > 0.9
+    assert result.percentile_05_correlation > 0.9
+    assert result.correlation_variance < 0.01
     assert result.phase_coherence > 0.95
     assert result.group_delay_std_ms < 0.05
     assert all(value > 0.9 for value in result.band_correlations.values())
+    assert result.used_frames >= result.frames_per_band * len(result.band_correlations)
 
 
 def test_tfs_correlation_degrades_with_phase_modulation() -> None:
@@ -73,8 +76,25 @@ def test_tfs_correlation_degrades_with_phase_modulation() -> None:
         freq_bands=[(4000.0, 6000.0)],
     )
 
-    assert result.mean_correlation < 0.85
+    assert result.percentile_05_correlation < 0.95
     assert result.phase_coherence < 0.9
+    assert result.correlation_variance > 1e-4
+
+
+def test_tfs_skips_low_envelope_frames() -> None:
+    sr = 48_000
+    tone = _sine(sample_rate=sr, freq=5000.0, duration=0.05)
+    silence = np.zeros(int(sr * 0.05))
+    reference = np.concatenate([tone, silence, tone])
+    dut = reference.copy()
+
+    result = calculate_tfs_correlation(
+        reference=reference, dut=dut, sample_rate=sr, freq_bands=[(4000.0, 6000.0)]
+    )
+
+    total_slots = result.frames_per_band * len(result.band_correlations)
+    assert result.used_frames < total_slots
+    assert result.mean_correlation > 0.85
 
 
 def test_tfs_phase_coherence_is_robust_to_constant_delay() -> None:
@@ -100,3 +120,4 @@ def test_tfs_phase_coherence_is_robust_to_constant_delay() -> None:
 
     assert result.mean_correlation > 0.9
     assert result.phase_coherence > 0.95
+    assert result.used_frames > 0

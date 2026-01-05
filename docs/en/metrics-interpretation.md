@@ -43,8 +43,8 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Heuristic: correlation ≥0.9 good; <0.8 suggests modulation texture degradation. Use `band_correlations` to locate bands.
 
 ### Temporal Fine Structure (TFS)
-- What: high-band phase coherence and group-delay stability. `mean_correlation` (→1 good), `phase_coherence`, `group_delay_std_ms`.
-- Heuristic: correlation ≥0.85 good; `group_delay_std_ms` > ~0.2 ms indicates notable inter-band delay spread. Check `band_group_delays_ms`.
+- What: high-band short-time phase correlation. Check `mean_correlation` (STCC mean), `percentile_05_correlation` (worst-case tail), `correlation_variance`, `phase_coherence`, and `group_delay_std_ms`.
+- Heuristic: `mean_correlation` ≥0.85 is healthy; low `percentile_05_correlation` means intermittent breakdowns. `group_delay_std_ms` > ~0.2 ms indicates noticeable inter-band delay spread. `frame_length_ms`, `frame_hop_ms`, `max_lag_ms`, and `envelope_threshold_db` in the report document the STCC settings (low-envelope frames are dropped).
 
 ### Transient / Edge rounding
 - What: rounded edges in impulses/clicks. Keys: `attack_time_ms` (DUT), `attack_time_delta_ms` (DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index` (width ratio).

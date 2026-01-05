@@ -70,6 +70,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
   - THD: `--fundamental-freq` `--expected-level-dbfs`
   - NPS/ノッチPSD: `--notch-center-hz` `--notch-q`
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
+  - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
 - 例: JSON と Markdown を保存
 ```
 uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \

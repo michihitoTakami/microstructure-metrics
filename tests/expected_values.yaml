@@ -9,11 +9,17 @@ band_limit:
       expected: 0.0014395500504565618
       tolerance: 0.01
     tfs_mean_correlation:
-      expected: 0.9438451903855913
+      expected: 0.9501937876988462
       tolerance: 0.05
     tfs_phase_coherence:
-      expected: 0.94644920262413
+      expected: 0.9342608030088518
       tolerance: 0.05
+    tfs_percentile_05_correlation:
+      expected: 0.9373920351791751
+      tolerance: 0.05
+    tfs_correlation_variance:
+      expected: 0.000350837485298738
+      tolerance: 0.01
   severity: 0.8
   signal_type: tfs-tones
 edge_rounding_click:
@@ -210,11 +216,17 @@ phase_distortion:
   description: slow phase warp via all-pass style modulation.
   metrics:
     tfs_mean_correlation:
-      expected: 0.9396838519319823
+      expected: 0.9531274833525679
       tolerance: 0.05
     tfs_phase_coherence:
-      expected: 0.9297140544040522
+      expected: 0.656407188768625
+      tolerance: 0.1
+    tfs_percentile_05_correlation:
+      expected: 0.8946363407794006
       tolerance: 0.05
+    tfs_correlation_variance:
+      expected: 0.0012137311656648076
+      tolerance: 0.01
   severity: 0.75
   signal_type: tfs-tones
 soft_clipping:
