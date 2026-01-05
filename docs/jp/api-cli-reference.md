@@ -17,7 +17,6 @@ uv run microstructure-metrics generate <signal_type> [options]
   - `--duration,-d` (sec, default 10.0) テスト本体長
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
-  - NPS(notched-noise): `--center` `--centers` `--q` `--notch-cascade-stages` `--lowcut` `--highcut`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
   - TFS: `--min-freq` `--tone-count` `--tone-step`
   - tone-burst: `--burst-freq` `--burst-cycles` `--burst-level-dbfs` `--burst-fade-cycles`

@@ -2,7 +2,7 @@
 
 ## Purpose and scope
 - Define standard test signal structure, file/metadata formats, and naming rules.
-- Applicable to all metrics in this project: THD+N, NPS, ΔSE, MPS, TFS.
+- Applicable to all metrics in this project: THD+N, MPS, TFS, Transient.
 - Input/output are offline WAV files; realtime I/O is out of scope.
 
 ## Standard timeline
@@ -17,10 +17,9 @@
 | Metric | Signal | Parameters (recommendation) |
 |--------|--------|-----------------------------|
 | THD+N  | Pure tone | 1 kHz, -3 dBFS, length 5 s |
-| NPS    | Notched noise | Pink noise with notch at 8 kHz, Q=8.6, overall RMS ≈ -14 dBFS, length 10 s |
-| ΔSE    | Pink noise (or music-like synthetic) | 20 Hz–20 kHz, RMS ≈ -14 dBFS, length 10 s |
 | MPS    | AM/FM composite | Carrier 1 kHz, AM: 4 Hz depth 50%; optional FM: dev 50 Hz @ 4 Hz, peak ≈ -6 dBFS, length 8 s |
 | TFS    | High-band multitone | Example tones: 4, 6, 8, 10, 12 kHz, equal amplitude, peak ≈ -6 dBFS, length 8 s |
+| Transient | Impulse / click train | Spaced impulses or tone bursts, peak near -1 dBFS, length 0.3–1.0 s |
 
 Notes:
 - Use 24-bit or 32-bit float generation to avoid quantization during synthesis.

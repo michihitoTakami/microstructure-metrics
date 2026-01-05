@@ -2,7 +2,7 @@
 
 ## 目的と範囲
 - テスト信号の構造・フォーマット・命名規則を定義し、測定と指標計算を再現性高く行う。
-- 対象指標: THD+N, NPS, ΔSE, MPS, TFS。入出力はオフラインWAV。
+- 対象指標: THD+N, MPS, TFS, Transient。入出力はオフラインWAV。
 
 ## 標準タイムライン
 ```
@@ -16,10 +16,9 @@
 | Metric | Signal | 主パラメータ例 |
 | --- | --- | --- |
 | THD+N | Pure tone | 1 kHz, -3 dBFS, 長さ 5 s |
-| NPS | Notched noise | 8 kHz ノッチ, Q=8.6, pink, RMS≈-14 dBFS, 10 s |
-| ΔSE | Pink noise | 20–20 kHz, RMS≈-14 dBFS, 10 s |
 | MPS | AM/FM composite | 1 kHz carrier, AM 4 Hz depth 50%, FM 50 Hz@4 Hz, peak≈-6 dBFS, 8 s |
 | TFS | High-band multitone | 4/6/8/10/12 kHz 等振幅, peak≈-6 dBFS, 8 s |
+| Transient | Impulse / tone burst train | インパルスまたはバースト列、ピーク -1 dBFS 付近、0.3–1.0 s |
 
 ## ファイルフォーマット
 - サンプルレート: 48 kHz 必須（高帯域検証のみ 96 kHz 可）。
@@ -36,7 +35,7 @@ thd_1khz_48000_24bit_v1.wav
 notched_noise_8000hz_q8.6_48000_24bit_v1.wav
 pink_noise_48000_24bit_v1.wav
 ```
-- signal_type: thd, notched_noise, pink_noise, mps, tfs など。
+- signal_type: thd, pink_noise, mps, tfs, transient など。
 - bit_depth: `24bit` または `32f`。
 - version: パラメータ変更時は vN または semver で更新。
 - 追加パラメータは signal_type 直後に挿入可（例: `mps_1khz_am4hz50_fm50hz_48000_24bit_v1.wav`）。

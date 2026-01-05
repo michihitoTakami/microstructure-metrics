@@ -1,7 +1,7 @@
 # Microstructure Metrics
 
 Human-perception-oriented DAC/AMP microdynamics evaluation suite.
-Provides offline alignment, drift estimation, signal generation, and six metrics (THD+N / NPS / PSD notch depth / ΔSE / MPS / TFS) in one pipeline.
+Provides offline alignment, drift estimation, signal generation, and four metrics (THD+N / MPS / TFS / Transient) in one pipeline.
 
 ## Why this project
 
@@ -15,9 +15,6 @@ Modern DAC/AMPs often exceed 120 dB SINAD, yet steady-state metrics alone cannot
 | Metric | Purpose |
 | --- | --- |
 | THD+N | Baseline gain/distortion health |
-| Notch Preservation Score (NPS) | Notch depth preservation vs noise/IMD pollution |
-| PSD Notch Depth (high-Q) | Narrowband Welch PSD depth vs surrounding ring for high-Q notches |
-| Spectral Entropy ΔSE | Information loss / spectral flattening |
 | Modulation Power Spectrum (MPS) | Texture preservation (correlation/distance) |
 | Temporal Fine Structure (TFS) | High-band phase coherence & group-delay stability |
 | Transient / Edge rounding | Edge sharpness vs smearing in clicks/impulses |
