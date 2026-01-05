@@ -27,6 +27,9 @@ from microstructure_metrics.metrics.tfs import (
 )
 from microstructure_metrics.metrics.thd_n import THDNResult, calculate_thd_n
 from microstructure_metrics.metrics.transient import (
+    DistributionStats,
+    TransientEvent,
+    TransientParams,
     TransientResult,
     calculate_transient_metrics,
 )
@@ -52,6 +55,9 @@ __all__ = [
     "TFSCorrelationResult",
     "extract_tfs",
     "calculate_tfs_correlation",
+    "DistributionStats",
+    "TransientEvent",
+    "TransientParams",
     "TransientResult",
     "calculate_transient_metrics",
 ]

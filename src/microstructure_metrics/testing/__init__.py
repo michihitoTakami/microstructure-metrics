@@ -61,6 +61,15 @@ _ALL_METRIC_KEYS = {
     "attack_time_delta_ms",
     "edge_sharpness_ratio",
     "transient_smearing_index",
+    "transient_smearing_index_p95",
+    "edge_sharpness_ratio_p05",
+    "edge_sharpness_ratio_p95",
+    "attack_time_delta_p95_ms",
+    "transient_events_ref",
+    "transient_events_dut",
+    "transient_events_matched",
+    "transient_unmatched_ref",
+    "transient_unmatched_dut",
 }
 
 
@@ -439,7 +448,7 @@ def _default_signal_for_degradation(degradation: str) -> str:
 
 
 def _coerce_float(value: object, default: float) -> float:
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     if isinstance(value, str):
         try:
@@ -789,6 +798,15 @@ def evaluate_metrics(
         "attack_time_delta_ms",
         "edge_sharpness_ratio",
         "transient_smearing_index",
+        "transient_smearing_index_p95",
+        "edge_sharpness_ratio_p05",
+        "edge_sharpness_ratio_p95",
+        "attack_time_delta_p95_ms",
+        "transient_events_ref",
+        "transient_events_dut",
+        "transient_events_matched",
+        "transient_unmatched_ref",
+        "transient_unmatched_dut",
     } & requested:
         transient = calculate_transient_metrics(
             reference=reference, dut=dut, sample_rate=sample_rate
@@ -797,5 +815,22 @@ def evaluate_metrics(
         results["attack_time_delta_ms"] = transient.attack_time_delta_ms
         results["edge_sharpness_ratio"] = transient.edge_sharpness_ratio
         results["transient_smearing_index"] = transient.transient_smearing_index
+        results["transient_smearing_index_p95"] = (
+            transient.width_ratio_stats.percentile_95
+        )
+        results["edge_sharpness_ratio_p05"] = (
+            transient.edge_sharpness_ratio_stats.percentile_05
+        )
+        results["edge_sharpness_ratio_p95"] = (
+            transient.edge_sharpness_ratio_stats.percentile_95
+        )
+        results["attack_time_delta_p95_ms"] = (
+            transient.attack_time_delta_stats_ms.percentile_95
+        )
+        results["transient_events_ref"] = len(transient.ref_events)
+        results["transient_events_dut"] = len(transient.dut_events)
+        results["transient_events_matched"] = transient.matched_event_pairs
+        results["transient_unmatched_ref"] = transient.unmatched_ref_events
+        results["transient_unmatched_dut"] = transient.unmatched_dut_events
 
     return {k: v for k, v in results.items() if k in requested}

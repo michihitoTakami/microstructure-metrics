@@ -47,11 +47,12 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Heuristic: `mean_correlation` ≥0.85 is healthy; low `percentile_05_correlation` means intermittent breakdowns. `group_delay_std_ms` > ~0.2 ms indicates noticeable inter-band delay spread. `frame_length_ms`, `frame_hop_ms`, `max_lag_ms`, and `envelope_threshold_db` in the report document the STCC settings (low-envelope frames are dropped).
 
 ### Transient / Edge rounding
-- What: rounded edges in impulses/clicks. Keys: `attack_time_ms` (DUT), `attack_time_delta_ms` (DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index` (width ratio).
-- Heuristic: `attack_time_delta_ms` > 0 or `edge_sharpness_ratio` < 1 → slower/rounded edge. `transient_smearing_index` > 1 → wider main lobe (more smearing).
+- What: rounded edges in impulses/clicks, now via multi-event scanning. The envelope is scanned with a -25 dB peak threshold, 2.5 ms refractory, 40 ms max event length, and 1.5 ms ref/dut matching tolerance.
+- Keys: medians `attack_time_ms` (DUT), `attack_time_delta_ms` (DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index` (width ratio) plus distribution views `edge_sharpness_ratio_p05/p95`, `transient_smearing_index_p95`, `attack_time_delta_p95_ms`, and `event_counts.*`. Width is measured at 30% peak crossings.
+- Heuristic: `attack_time_delta_ms` > 0 or `edge_sharpness_ratio` < 1 → slower/rounded edge. `transient_smearing_index` > 1 → wider main lobe (more smearing). Large p95 values mean localized degradation.
 - Best for: edge rounding, slew limiting, or windowing that blunts sharp attacks.
 - Input requirements: impulse/edge stimulus (single Dirac or steep step per `signal-specifications.md`). Not meaningful on stationary noise or sinusoids.
-- Robustness: uses smoothed envelope/energy to tolerate phase jitter and noise.
+- Robustness: uses smoothed envelope/energy to tolerate phase jitter and noise; if no events are detected, values fall back to 0.
 
 ## Reading examples
 - “NPS +4 dB, ΔSE +0.03”: notch is filled and entropy degrades—likely dynamic IMD or added noise.

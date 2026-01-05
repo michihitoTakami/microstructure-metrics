@@ -52,11 +52,12 @@
 - 帯域別 `band_group_delays_ms` で特定の帯域の遅延ズレを確認。レポートには `frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db` が記録される（低包絡フレームは除外）。
 
 ### Transient / エッジ丸まり
-- 内容: インパルス/クリックの立ち上がり丸まりを検出。`attack_time_ms`(DUT), `attack_time_delta_ms`(DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index`(幅比) を確認。
-- 目安: `attack_time_delta_ms` > 0 または `edge_sharpness_ratio` < 1 で鈍化傾向。`transient_smearing_index` > 1 で主峰が広がり(スメア)。
+- 内容: インパルス/クリックの立ち上がり丸まりをマルチイベントで検出。包絡を走査し、ピーク閾値(-25 dB相当)、不感時間(2.5 ms)、最大イベント長(40 ms)を用いて複数ピークを抽出し、マッチング許容1.5 msでref/dutを対応付ける。
+- 確認指標: 中央値系の `attack_time_ms`(DUT), `attack_time_delta_ms`(DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index`(幅比) に加え、分布評価として `edge_sharpness_ratio_p05/p95`, `transient_smearing_index_p95`, `attack_time_delta_p95_ms`、イベント数 `event_counts.*` を見る。幅はピーク30%の交差幅で評価。
+- 目安: `attack_time_delta_ms` > 0 または `edge_sharpness_ratio` < 1 で鈍化傾向。`transient_smearing_index` > 1 で主峰が広がり(スメア)。p95 が大きい場合は局所的な悪化が混在。
 - 得意: フィルタのロールオフやスルーレート不足による立ち上がり鈍化、ウィンドウ処理での丸まり検知。
 - 入力条件: 単一インパルスや急峻ステップなどエッジを含む刺激（`signal-specifications.md`参照）。定常ノイズやサイン波では意味を持たない。
-- ノイズ/位相ばらつき耐性: 包絡エネルギーを平滑してから特徴抽出。
+- ノイズ/位相ばらつき耐性: 包絡エネルギーを平滑してから特徴抽出。イベント数が0の場合は指標は0となる。
 
 ## 典型的な読み解き例
 - 「NPS が +4 dB、ΔSE が +0.03」: ノッチが埋まり、情報量も損なわれている。動的IMDや高域ノイズの混入を疑う。

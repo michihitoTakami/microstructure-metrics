@@ -578,12 +578,37 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
         "attack_time_ref_ms": float(result.attack_time_ref_ms),
         "attack_time_dut_ms": float(result.attack_time_dut_ms),
         "attack_time_delta_ms": float(result.attack_time_delta_ms),
+        "attack_time_delta_p95_ms": float(
+            result.attack_time_delta_stats_ms.percentile_95
+        ),
         "edge_sharpness_ref": float(result.edge_sharpness_ref),
         "edge_sharpness_dut": float(result.edge_sharpness_dut),
         "edge_sharpness_ratio": float(result.edge_sharpness_ratio),
+        "edge_sharpness_ratio_p05": float(
+            result.edge_sharpness_ratio_stats.percentile_05
+        ),
+        "edge_sharpness_ratio_p95": float(
+            result.edge_sharpness_ratio_stats.percentile_95
+        ),
         "width_ref_ms": float(result.width_ref_ms),
         "width_dut_ms": float(result.width_dut_ms),
         "transient_smearing_index": float(result.transient_smearing_index),
+        "transient_smearing_index_p95": float(result.width_ratio_stats.percentile_95),
+        "event_counts": {
+            "ref": len(result.ref_events),
+            "dut": len(result.dut_events),
+            "matched": int(result.matched_event_pairs),
+            "unmatched_ref": int(result.unmatched_ref_events),
+            "unmatched_dut": int(result.unmatched_dut_events),
+        },
+        "params": {
+            "smoothing_ms": float(result.params.smoothing_ms),
+            "peak_threshold_db": float(result.params.peak_threshold_db),
+            "refractory_ms": float(result.params.refractory_ms),
+            "match_tolerance_ms": float(result.params.match_tolerance_ms),
+            "max_event_duration_ms": float(result.params.max_event_duration_ms),
+            "width_fraction": float(result.params.width_fraction),
+        },
     }
 
 

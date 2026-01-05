@@ -39,7 +39,7 @@ edge_rounding_click:
       expected: 0.9131471530989018
       tolerance: 0.045657357654945094
     transient_smearing_index:
-      expected: 1.0
+      expected: 1.0833333333333333
       tolerance: 0.05
   severity: 0.8
   signal_type: click
@@ -249,11 +249,11 @@ time_smoothing_attack:
   description: envelope smoothing to emulate rounded attacks without heavy LPF.
   metrics:
     attack_time_delta_ms:
-      expected: 9.0625
-      tolerance: 0.90625
+      expected: 0.0
+      tolerance: 0.2
     attack_time_ms:
-      expected: 10.729166666666666
-      tolerance: 1.0729166666666667
+      expected: 0.4166666666666667
+      tolerance: 0.2
     delta_se_mean:
       expected: -0.011845309118510347
       tolerance: 0.01
@@ -285,7 +285,7 @@ tone_burst_smearing:
       expected: 0.2234106374168738
       tolerance: 0.02
     transient_smearing_index:
-      expected: 0.6666666666666667
-      tolerance: 0.03333333333333334
+      expected: 0.8181818181818182
+      tolerance: 0.05
   severity: 0.65
   signal_type: tone-burst
