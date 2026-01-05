@@ -55,6 +55,18 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     payload = json.loads(json_path.read_text())
     for key in ["thd_n", "nps", "notch_psd", "delta_se", "transient", "mps", "tfs"]:
         assert key in payload["metrics"]
+    tfs_payload = payload["metrics"]["tfs"]
+    for key in [
+        "percentile_05_correlation",
+        "correlation_variance",
+        "frames_per_band",
+        "frame_length_ms",
+        "frame_hop_ms",
+        "max_lag_ms",
+        "envelope_threshold_db",
+    ]:
+        assert key in tfs_payload
+    assert tfs_payload["frames_per_band"] > 0
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 10
 
     assert csv_path.exists()

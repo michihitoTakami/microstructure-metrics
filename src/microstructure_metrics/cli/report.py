@@ -558,10 +558,18 @@ def _tfs_summary(result: TFSCorrelationResult) -> dict[str, object]:
     }
     return {
         "mean_correlation": float(result.mean_correlation),
+        "percentile_05_correlation": float(result.percentile_05_correlation),
+        "correlation_variance": float(result.correlation_variance),
         "phase_coherence": float(result.phase_coherence),
         "group_delay_std_ms": float(result.group_delay_std_ms),
         "band_correlations": band_corr,
         "band_group_delays_ms": group_delays,
+        "frames_per_band": int(result.frames_per_band),
+        "used_frames": int(result.used_frames),
+        "frame_length_ms": float(result.frame_length_ms),
+        "frame_hop_ms": float(result.frame_hop_ms),
+        "max_lag_ms": float(result.max_lag_ms),
+        "envelope_threshold_db": float(result.envelope_threshold_db),
     }
 
 

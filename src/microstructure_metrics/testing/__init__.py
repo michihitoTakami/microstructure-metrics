@@ -55,6 +55,8 @@ _ALL_METRIC_KEYS = {
     "psd_dut_notch_depth_db",
     "tfs_mean_correlation",
     "tfs_phase_coherence",
+    "tfs_percentile_05_correlation",
+    "tfs_correlation_variance",
     "attack_time_ms",
     "attack_time_delta_ms",
     "edge_sharpness_ratio",
@@ -123,6 +125,8 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
             "mps_distance",
             "tfs_mean_correlation",
             "tfs_phase_coherence",
+            "tfs_percentile_05_correlation",
+            "tfs_correlation_variance",
         ),
     ),
     RegressionCase(
@@ -235,7 +239,12 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         severity=0.75,
         duration=1.0,
         description="slow phase warp via all-pass style modulation.",
-        metrics=("tfs_mean_correlation", "tfs_phase_coherence"),
+        metrics=(
+            "tfs_mean_correlation",
+            "tfs_phase_coherence",
+            "tfs_percentile_05_correlation",
+            "tfs_correlation_variance",
+        ),
     ),
     RegressionCase(
         key="modulation_suppression",
@@ -761,12 +770,19 @@ def evaluate_metrics(
         results["mps_distance"] = mps.mps_distance
         results["mps_distance_weighted"] = mps.mps_distance_weighted
 
-    if {"tfs_mean_correlation", "tfs_phase_coherence"} & requested:
+    if {
+        "tfs_mean_correlation",
+        "tfs_phase_coherence",
+        "tfs_percentile_05_correlation",
+        "tfs_correlation_variance",
+    } & requested:
         tfs = calculate_tfs_correlation(
             reference=reference, dut=dut, sample_rate=sample_rate
         )
         results["tfs_mean_correlation"] = tfs.mean_correlation
         results["tfs_phase_coherence"] = tfs.phase_coherence
+        results["tfs_percentile_05_correlation"] = tfs.percentile_05_correlation
+        results["tfs_correlation_variance"] = tfs.correlation_variance
 
     if {
         "attack_time_ms",

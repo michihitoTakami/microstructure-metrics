@@ -47,9 +47,9 @@
 - 音楽的テクスチャが失われると相関が下がり距離が増える。
 
 ### Temporal Fine Structure (TFS)
-- 内容: 高域微細位相の相関と群遅延のばらつき。`mean_correlation` (1に近いほど良好)、`phase_coherence`、`group_delay_std_ms`。
-- 目安: 相関 0.85 以上で良好。`group_delay_std_ms` が大きい（>0.2 ms 程度）場合、帯域間の時間ずれが大きい可能性。
-- 帯域別 `band_group_delays_ms` で特定の帯域の遅延ズレを確認。
+- 内容: 高域微細位相の短時間相関。`mean_correlation`（STCC平均）、`percentile_05_correlation`（ワースト側分位点）、`correlation_variance`、`phase_coherence`、`group_delay_std_ms` を確認。
+- 目安: `mean_correlation` 0.85 以上で良好。`percentile_05_correlation` が低い場合は一部フレームで崩れている可能性。`group_delay_std_ms` が大きい（>0.2 ms 程度）場合、帯域間の時間ずれが大きい可能性。
+- 帯域別 `band_group_delays_ms` で特定の帯域の遅延ズレを確認。レポートには `frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db` が記録される（低包絡フレームは除外）。
 
 ### Transient / エッジ丸まり
 - 内容: インパルス/クリックの立ち上がり丸まりを検出。`attack_time_ms`(DUT), `attack_time_delta_ms`(DUT-ref), `edge_sharpness_ratio`, `transient_smearing_index`(幅比) を確認。
