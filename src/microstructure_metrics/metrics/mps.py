@@ -18,6 +18,8 @@ class MPSResult:
     """変調パワースペクトラム(MPS)計算結果。"""
 
     mps_matrix: npt.NDArray[np.float64]
+    mps_power: npt.NDArray[np.float64]
+    mps_db: npt.NDArray[np.float64]
     audio_freqs: npt.NDArray[np.float64]
     mod_freqs: npt.NDArray[np.float64]
 
@@ -28,9 +30,13 @@ class MPSSimilarityResult:
 
     mps_correlation: float
     mps_distance: float
+    mps_distance_weighted: float
     band_correlations: dict[float, float]
     ref_mps: npt.NDArray[np.float64]
     dut_mps: npt.NDArray[np.float64]
+    delta_mps_db: npt.NDArray[np.float64]
+    mod_weights: npt.NDArray[np.float64]
+    mod_weighting: Literal["none", "high_mod"]
     audio_freqs: npt.NDArray[np.float64]
     mod_freqs: npt.NDArray[np.float64]
 
@@ -163,20 +169,22 @@ def calculate_mps(
         raise ValueError("mod_freq_range removes all modulation bins")
 
     mod_axis = mod_freqs[mod_mask]
-    mps_matrix = np.abs(mod_spectrum[:, mod_mask]) ** 2
+    mps_power = np.abs(mod_spectrum[:, mod_mask]) ** 2
     if mod_scale == "log":
         target_bins = num_mod_bins or mod_axis.size
         log_freqs = np.geomspace(mod_low, mod_high, num=target_bins)
-        mps_matrix = _interpolate_mod_axis(
-            mps_matrix, source_freqs=mod_axis, target_freqs=log_freqs
+        mps_power = _interpolate_mod_axis(
+            mps_power, source_freqs=mod_axis, target_freqs=log_freqs
         )
         mod_axis = log_freqs
 
-    if mps_scale == "log":
-        mps_matrix = _power_to_db(mps_matrix)
+    mps_db = _power_to_db(mps_power)
+    mps_matrix = mps_db if mps_scale == "log" else mps_power
 
     return MPSResult(
         mps_matrix=np.asarray(mps_matrix, dtype=np.float64),
+        mps_power=np.asarray(mps_power, dtype=np.float64),
+        mps_db=np.asarray(mps_db, dtype=np.float64),
         audio_freqs=np.asarray(fb.center_frequencies, dtype=np.float64),
         mod_freqs=np.asarray(mod_axis, dtype=np.float64),
     )
@@ -202,6 +210,8 @@ def calculate_mps_similarity(
     mps_norm: Literal["global", "per_band", "none"] = "global",
     band_weights: npt.ArrayLike | None = None,
     band_weighting: Literal["none", "energy"] = "none",
+    mod_weights: npt.ArrayLike | None = None,
+    mod_weighting: Literal["none", "high_mod"] = "none",
 ) -> MPSSimilarityResult:
     """入出力のMPS類似度（相関/距離）を計算する。"""
 
@@ -250,7 +260,7 @@ def calculate_mps_similarity(
     weights = _resolve_band_weights(
         weighting=band_weighting,
         explicit_weights=band_weights,
-        reference_mps=ref_result.mps_matrix,
+        reference_mps=ref_result.mps_power,
     )
     ref_weighted = _apply_band_weights(ref_result.mps_matrix, weights)
     dut_weighted = _apply_band_weights(dut_result.mps_matrix, weights)
@@ -262,6 +272,15 @@ def calculate_mps_similarity(
 
     mps_correlation = _pearson(ref_norm.ravel(), dut_norm.ravel())
     mps_distance = float(np.sqrt(np.mean(np.square(ref_norm - dut_norm))))
+    resolved_mod_weights = _resolve_mod_weights(
+        weighting=mod_weighting,
+        explicit_weights=mod_weights,
+        mod_freqs=ref_result.mod_freqs,
+    )
+    diff = ref_norm - dut_norm
+    mps_distance_weighted = float(
+        np.sqrt(np.mean(np.square(diff) * resolved_mod_weights[None, :]))
+    )
 
     band_correlations: dict[float, float] = {}
     for idx, freq in enumerate(ref_result.audio_freqs):
@@ -270,9 +289,15 @@ def calculate_mps_similarity(
     return MPSSimilarityResult(
         mps_correlation=mps_correlation,
         mps_distance=mps_distance,
+        mps_distance_weighted=mps_distance_weighted,
         band_correlations=band_correlations,
         ref_mps=ref_result.mps_matrix,
         dut_mps=dut_result.mps_matrix,
+        delta_mps_db=np.asarray(
+            ref_result.mps_db - dut_result.mps_db, dtype=np.float64
+        ),
+        mod_weights=np.asarray(resolved_mod_weights, dtype=np.float64),
+        mod_weighting=mod_weighting,
         audio_freqs=ref_result.audio_freqs,
         mod_freqs=ref_result.mod_freqs,
     )
@@ -366,6 +391,31 @@ def _resolve_band_weights(
 
     if weights.size != reference_mps.shape[0]:
         raise ValueError("band_weights length must match number of bands")
+    return np.asarray(weights, dtype=np.float64)
+
+
+def _resolve_mod_weights(
+    *,
+    weighting: Literal["none", "high_mod"],
+    explicit_weights: npt.ArrayLike | None,
+    mod_freqs: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    if weighting not in {"none", "high_mod"}:
+        raise ValueError("mod_weighting must be 'none' or 'high_mod'")
+
+    if explicit_weights is not None:
+        weights = np.asarray(explicit_weights, dtype=np.float64).ravel()
+    elif weighting == "high_mod":
+        weights = np.ones(mod_freqs.shape[0], dtype=np.float64)
+        weights = np.where(mod_freqs >= 4.0, 2.0, weights)
+        weights = np.where(mod_freqs >= 10.0, 4.0, weights)
+    else:
+        weights = np.ones(mod_freqs.shape[0], dtype=np.float64)
+
+    if weights.size != mod_freqs.shape[0]:
+        raise ValueError("mod_weights length must match number of modulation bins")
+    if np.any(weights < 0) or not np.all(np.isfinite(weights)):
+        raise ValueError("mod_weights must be finite and non-negative")
     return np.asarray(weights, dtype=np.float64)
 
 
