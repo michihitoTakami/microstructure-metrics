@@ -1,6 +1,6 @@
 # Signal Format Specification (EN)
 
-Scope: define test signal structure, file/metadata formats, and naming rules for all metrics (THD+N, NPS, ΔSE, MPS, TFS). Input/output are offline WAV files.
+Scope: define test signal structure, file/metadata formats, and naming rules for all metrics (THD+N, MPS, TFS, Transient). Input/output are offline WAV files.
 
 ## Standard timeline
 ```
@@ -14,10 +14,9 @@ Scope: define test signal structure, file/metadata formats, and naming rules for
 | Metric | Signal | Parameters (example) |
 | --- | --- | --- |
 | THD+N | Pure tone | 1 kHz, -3 dBFS, 5 s |
-| NPS | Notched noise | Pink noise with 8 kHz notch, Q=8.6, RMS≈-14 dBFS, 10 s |
-| ΔSE | Pink noise | 20–20 kHz, RMS≈-14 dBFS, 10 s |
 | MPS | AM/FM composite | 1 kHz carrier, AM 4 Hz depth 50%, FM dev 50 Hz @4 Hz, peak≈-6 dBFS, 8 s |
 | TFS | High-band multitone | 4/6/8/10/12 kHz, equal amplitude, peak≈-6 dBFS, 8 s |
+| Transient | Impulse / tone burst train | Spaced impulses or bursts, peak near -1 dBFS, 0.3–1.0 s |
 
 ## File format
 - Sample rate: 48 kHz required (96 kHz only when explicitly needed).
@@ -34,7 +33,7 @@ thd_1khz_48000_24bit_v1.wav
 notched_noise_8000hz_q8.6_48000_24bit_v1.wav
 pink_noise_48000_24bit_v1.wav
 ```
-- `signal_type`: thd, notched_noise, pink_noise, mps, tfs, etc.
+- `signal_type`: thd, pink_noise, mps, tfs, transient, etc.
 - `bit_depth`: `24bit` or `32f`.
 - `version`: bump when parameters change (vN or semver).
 - Optional parameters can follow signal_type (e.g., `mps_1khz_am4hz50_fm50hz_48000_24bit_v1.wav`).

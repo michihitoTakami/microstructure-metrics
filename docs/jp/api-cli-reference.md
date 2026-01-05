@@ -17,7 +17,6 @@ uv run microstructure-metrics generate <signal_type> [options]
   - `--duration,-d` (sec, default 10.0) テスト本体長
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
-  - NPS(notched-noise): `--center` `--centers` `--q` `--notch-cascade-stages` `--lowcut` `--highcut`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
   - TFS: `--min-freq` `--tone-count` `--tone-step`
   - tone-burst: `--burst-freq` `--burst-cycles` `--burst-level-dbfs` `--burst-fade-cycles`
@@ -68,7 +67,6 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
   - THD: `--fundamental-freq` `--expected-level-dbfs`
-  - NPS/ノッチPSD: `--notch-center-hz` `--notch-q`
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
   - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
 - 例: JSON と Markdown を保存
@@ -84,6 +82,6 @@ uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
 
 ## Python API エントリポイント
 - アライメント/ドリフト: `microstructure_metrics.alignment.align_audio_pair`, `estimate_clock_drift`
-- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_nps`, `calculate_narrowband_notch_depth`, `calculate_delta_se`, `calculate_mps_similarity`, `calculate_tfs_correlation`
+- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_mps_similarity`, `calculate_tfs_correlation`, `calculate_transient_metrics`
 - 信号生成: `microstructure_metrics.signals.build_signal`
 各APIは numpy array とサンプルレートを受け取り、結果dataclassを返す。

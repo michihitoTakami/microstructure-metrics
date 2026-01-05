@@ -1,7 +1,7 @@
 # Microstructure Metrics (日本語)
 
 人間知覚指向のDAC/AMPマイクロダイナミクス評価スイート。
-パイロットトーンを用いたアライメント・ドリフト推定・信号生成から、THD+N / NPS / ΔSE / MPS / TFS を一括算出するオフラインパイプラインを提供します。
+パイロットトーンを用いたアライメント・ドリフト推定・信号生成から、THD+N / MPS / TFS / Transient を一括算出するオフラインパイプラインを提供します。
 
 ## なぜ必要か
 
@@ -16,9 +16,6 @@
 | Metric | 目的 |
 | --- | --- |
 | THD+N | 基本ゲイン/歪みの健全性確認 |
-| Notch Preservation Score (NPS) | ノッチ再現性とノイズに埋もれる度合い |
-| PSDノッチ深さ (高Q) | 高QノッチのWelch PSD深さとリング比 |
-| Spectral Entropy ΔSE | スペクトルの情報量変化（平坦化の度合い） |
 | Modulation Power Spectrum (MPS) | 変調テクスチャの保持度（相関/距離） |
 | Temporal Fine Structure (TFS) | 高域微細位相の相関・群遅延ばらつき |
 | Transient / エッジ丸まり | インパルス/クリックの立ち上がり鋭さ・スメア |

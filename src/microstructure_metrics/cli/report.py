@@ -19,17 +19,11 @@ from microstructure_metrics.alignment import (
 )
 from microstructure_metrics.io import load_audio_pair
 from microstructure_metrics.metrics import (
-    DeltaSEResult,
     MPSSimilarityResult,
-    NarrowbandNotchDepthResult,
-    NPSResult,
     TFSCorrelationResult,
     THDNResult,
     TransientResult,
-    calculate_delta_se,
     calculate_mps_similarity,
-    calculate_narrowband_notch_depth,
-    calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
     calculate_transient_metrics,
@@ -139,18 +133,6 @@ DEFAULT_JSON = "metrics_report.json"
     ),
 )
 @click.option(
-    "--notch-center-hz",
-    default=8000.0,
-    show_default=True,
-    help="NPS のノッチ中心周波数 (Hz)",
-)
-@click.option(
-    "--notch-q",
-    default=8.6,
-    show_default=True,
-    help="NPS のノッチQ",
-)
-@click.option(
     "--mps-filterbank",
     type=click.Choice(["gammatone", "mel"]),
     default="gammatone",
@@ -250,8 +232,6 @@ def report(
     max_lag_ms: float,
     fundamental_freq: float,
     expected_level_dbfs: float | None,
-    notch_center_hz: float,
-    notch_q: float,
     mps_filterbank: str,
     mps_filterbank_order: int,
     mps_filterbank_bandwidth_scale: float,
@@ -322,8 +302,6 @@ def report(
         sample_rate=sample_rate,
         fundamental_freq=fundamental_freq,
         expected_level_dbfs=expected_level_dbfs,
-        notch_center_hz=notch_center_hz,
-        notch_q=notch_q,
         mps_filterbank=mps_filterbank,
         mps_filterbank_kwargs={
             "order": mps_filterbank_order,
@@ -380,8 +358,6 @@ def _calculate_metrics(
     sample_rate: int,
     fundamental_freq: float,
     expected_level_dbfs: float | None,
-    notch_center_hz: float,
-    notch_q: float,
     mps_filterbank: str,
     mps_filterbank_kwargs: dict[str, float | int | None],
     mps_envelope_method: str,
@@ -400,25 +376,6 @@ def _calculate_metrics(
         fundamental_freq=fundamental_freq,
         sample_rate=sample_rate,
         expected_level_dbfs=expected_level_dbfs,
-    )
-    nps = calculate_nps(
-        reference=aligned_ref,
-        dut=aligned_dut,
-        sample_rate=sample_rate,
-        notch_center_hz=notch_center_hz,
-        notch_q=notch_q,
-    )
-    notch_psd = calculate_narrowband_notch_depth(
-        reference=aligned_ref,
-        dut=aligned_dut,
-        sample_rate=sample_rate,
-        notch_center_hz=notch_center_hz,
-        notch_q=notch_q,
-    )
-    delta_se = calculate_delta_se(
-        reference=aligned_ref,
-        dut=aligned_dut,
-        sample_rate=sample_rate,
     )
     transient = calculate_transient_metrics(
         reference=aligned_ref,
@@ -449,9 +406,6 @@ def _calculate_metrics(
 
     return {
         "thd_n": _thd_summary(thd),
-        "nps": _nps_summary(nps),
-        "notch_psd": _notch_psd_summary(notch_psd),
-        "delta_se": _delta_se_summary(delta_se),
         "transient": _transient_summary(transient),
         "mps": _mps_summary(mps),
         "tfs": _tfs_summary(tfs),
@@ -493,44 +447,6 @@ def _thd_summary(result: THDNResult) -> dict[str, object]:
             str(k): float(v) for k, v in result.harmonic_levels.items()
         },
         "warnings": list(result.warnings),
-    }
-
-
-def _nps_summary(result: NPSResult) -> dict[str, object]:
-    return {
-        "nps_db": float(result.nps_db),
-        "nps_ratio": float(result.nps_ratio),
-        "ref_notch_depth_db": float(result.ref_notch_depth_db),
-        "dut_notch_depth_db": float(result.dut_notch_depth_db),
-        "notch_center_hz": float(result.notch_center_hz),
-        "notch_q": float(result.notch_q),
-        "noise_floor_db": float(result.noise_floor_db),
-        "is_noise_limited": bool(result.is_noise_limited),
-    }
-
-
-def _notch_psd_summary(result: NarrowbandNotchDepthResult) -> dict[str, object]:
-    return {
-        "ref_notch_depth_db": float(result.ref_notch_depth_db),
-        "dut_notch_depth_db": float(result.dut_notch_depth_db),
-        "notch_fill_db": float(result.notch_fill_db),
-        "ref_notch_power_db": float(result.ref_notch_power_db),
-        "dut_notch_power_db": float(result.dut_notch_power_db),
-        "ref_ring_power_db": float(result.ref_ring_power_db),
-        "dut_ring_power_db": float(result.dut_ring_power_db),
-        "notch_center_hz": float(result.notch_center_hz),
-        "notch_bandwidth_hz": float(result.notch_bandwidth_hz),
-        "ring_bandwidth_hz": float(result.ring_bandwidth_hz),
-    }
-
-
-def _delta_se_summary(result: DeltaSEResult) -> dict[str, object]:
-    return {
-        "delta_se_mean": float(result.delta_se_mean),
-        "delta_se_std": float(result.delta_se_std),
-        "delta_se_max": float(result.delta_se_max),
-        "ref_se_mean": float(result.ref_se_mean),
-        "dut_se_mean": float(result.dut_se_mean),
     }
 
 
@@ -578,12 +494,37 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
         "attack_time_ref_ms": float(result.attack_time_ref_ms),
         "attack_time_dut_ms": float(result.attack_time_dut_ms),
         "attack_time_delta_ms": float(result.attack_time_delta_ms),
+        "attack_time_delta_p95_ms": float(
+            result.attack_time_delta_stats_ms.percentile_95
+        ),
         "edge_sharpness_ref": float(result.edge_sharpness_ref),
         "edge_sharpness_dut": float(result.edge_sharpness_dut),
         "edge_sharpness_ratio": float(result.edge_sharpness_ratio),
+        "edge_sharpness_ratio_p05": float(
+            result.edge_sharpness_ratio_stats.percentile_05
+        ),
+        "edge_sharpness_ratio_p95": float(
+            result.edge_sharpness_ratio_stats.percentile_95
+        ),
         "width_ref_ms": float(result.width_ref_ms),
         "width_dut_ms": float(result.width_dut_ms),
         "transient_smearing_index": float(result.transient_smearing_index),
+        "transient_smearing_index_p95": float(result.width_ratio_stats.percentile_95),
+        "event_counts": {
+            "ref": len(result.ref_events),
+            "dut": len(result.dut_events),
+            "matched": int(result.matched_event_pairs),
+            "unmatched_ref": int(result.unmatched_ref_events),
+            "unmatched_dut": int(result.unmatched_dut_events),
+        },
+        "params": {
+            "smoothing_ms": float(result.params.smoothing_ms),
+            "peak_threshold_db": float(result.params.peak_threshold_db),
+            "refractory_ms": float(result.params.refractory_ms),
+            "match_tolerance_ms": float(result.params.match_tolerance_ms),
+            "max_event_duration_ms": float(result.params.max_event_duration_ms),
+            "width_fraction": float(result.params.width_fraction),
+        },
     }
 
 
