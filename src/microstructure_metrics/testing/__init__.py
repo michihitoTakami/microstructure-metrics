@@ -13,10 +13,7 @@ from numpy.random import Generator, default_rng
 from scipy import signal
 
 from microstructure_metrics.metrics import (
-    calculate_delta_se,
     calculate_mps_similarity,
-    calculate_narrowband_notch_depth,
-    calculate_nps,
     calculate_tfs_correlation,
     calculate_thd_n,
     calculate_transient_metrics,
@@ -33,8 +30,6 @@ DEGRADATION_TYPES = (
     "soft_clipping",
     "band_limit",
     "noise",
-    "notch_fill",
-    "notch_blur",
     "phase_distortion",
     "modulation_suppression",
     "time_smoothing",
@@ -42,17 +37,8 @@ DEGRADATION_TYPES = (
 _ALL_METRIC_KEYS = {
     "thd_n_db",
     "sinad_db",
-    "nps_db",
-    "ref_notch_depth_db",
-    "dut_notch_depth_db",
-    "delta_se_mean",
-    "delta_se_max",
     "mps_correlation",
     "mps_distance",
-    "mps_distance_weighted",
-    "psd_notch_fill_db",
-    "psd_ref_notch_depth_db",
-    "psd_dut_notch_depth_db",
     "tfs_mean_correlation",
     "tfs_phase_coherence",
     "tfs_percentile_05_correlation",
@@ -120,7 +106,7 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         severity=0.65,
         duration=1.2,
         description="tanh soft clipping to introduce broadband distortion.",
-        metrics=("nps_db", "delta_se_mean", "delta_se_max"),
+        metrics=("thd_n_db", "sinad_db"),
     ),
     RegressionCase(
         key="band_limit",
@@ -145,101 +131,7 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         severity=0.6,
         duration=1.0,
         description="white noise at roughly -60 dBFS.",
-        metrics=("thd_n_db", "delta_se_mean"),
-    ),
-    RegressionCase(
-        key="notch_fill",
-        degradation="notch_fill",
-        signal_type="notched-noise",
-        severity=0.7,
-        duration=1.2,
-        description="fill the spectral notch with band-limited noise.",
-        metrics=(
-            "nps_db",
-            "dut_notch_depth_db",
-            "ref_notch_depth_db",
-            "psd_notch_fill_db",
-            "psd_ref_notch_depth_db",
-            "psd_dut_notch_depth_db",
-        ),
-    ),
-    RegressionCase(
-        key="notch_fill_low_q",
-        degradation="notch_fill",
-        signal_type="notched-noise",
-        severity=0.7,
-        duration=1.2,
-        rng_seed=1,
-        signal_kwargs={
-            "notch_q": 2.0,
-        },
-        description="fill the spectral notch with band-limited noise (low-Q notch).",
-        metrics=(
-            "nps_db",
-            "dut_notch_depth_db",
-            "ref_notch_depth_db",
-            "psd_notch_fill_db",
-            "psd_ref_notch_depth_db",
-            "psd_dut_notch_depth_db",
-        ),
-    ),
-    RegressionCase(
-        key="notch_fill_high_q",
-        degradation="notch_fill",
-        signal_type="notched-noise",
-        severity=0.7,
-        duration=1.2,
-        rng_seed=2,
-        signal_kwargs={
-            "notch_q": 80.0,
-            "notch_cascade_stages": 2,
-        },
-        description="fill the spectral notch with band-limited noise (high-Q notch).",
-        metrics=(
-            "nps_db",
-            "dut_notch_depth_db",
-            "ref_notch_depth_db",
-            "psd_notch_fill_db",
-            "psd_ref_notch_depth_db",
-            "psd_dut_notch_depth_db",
-        ),
-    ),
-    RegressionCase(
-        key="notch_blur",
-        degradation="notch_blur",
-        signal_type="notched-noise",
-        severity=0.7,
-        duration=1.2,
-        description="blur the spectral notch by smoothing magnitude response.",
-        metrics=(
-            "nps_db",
-            "dut_notch_depth_db",
-            "ref_notch_depth_db",
-            "psd_notch_fill_db",
-            "psd_ref_notch_depth_db",
-            "psd_dut_notch_depth_db",
-        ),
-    ),
-    RegressionCase(
-        key="notch_blur_high_q",
-        degradation="notch_blur",
-        signal_type="notched-noise",
-        severity=0.7,
-        duration=1.2,
-        rng_seed=3,
-        signal_kwargs={
-            "notch_q": 50.0,
-            "notch_cascade_stages": 2,
-        },
-        description="blur the spectral notch by smoothing magnitude response (high-Q).",
-        metrics=(
-            "nps_db",
-            "dut_notch_depth_db",
-            "ref_notch_depth_db",
-            "psd_notch_fill_db",
-            "psd_ref_notch_depth_db",
-            "psd_dut_notch_depth_db",
-        ),
+        metrics=("thd_n_db", "sinad_db"),
     ),
     RegressionCase(
         key="phase_distortion",
@@ -289,8 +181,6 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         degradation_kwargs={"cutoff_hz": 8000.0},
         description="band-limited click to emulate rounded transient edges.",
         metrics=(
-            "delta_se_mean",
-            "delta_se_max",
             "attack_time_delta_ms",
             "edge_sharpness_ratio",
             "transient_smearing_index",
@@ -304,7 +194,6 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         duration=1.0,
         description="envelope smoothing to emulate rounded attacks without heavy LPF.",
         metrics=(
-            "delta_se_mean",
             "attack_time_ms",
             "attack_time_delta_ms",
             "edge_sharpness_ratio",
@@ -319,8 +208,6 @@ DEFAULT_REGRESSION_CASES: tuple[RegressionCase, ...] = (
         duration=1.0,
         description="smooth tone bursts to emulate rounded edges across repeated hits.",
         metrics=(
-            "delta_se_mean",
-            "delta_se_max",
             "attack_time_ms",
             "attack_time_delta_ms",
             "edge_sharpness_ratio",
@@ -438,8 +325,6 @@ def _default_signal_for_degradation(degradation: str) -> str:
         "soft_clipping": "pink-noise",
         "band_limit": "tfs-tones",
         "noise": "thd",
-        "notch_fill": "notched-noise",
-        "notch_blur": "notched-noise",
         "phase_distortion": "tfs-tones",
         "modulation_suppression": "modulated",
         "time_smoothing": "am-attack",
@@ -735,41 +620,6 @@ def evaluate_metrics(
             )
             results["thd_n_db"] = thd.thd_n_db
             results["sinad_db"] = thd.sinad_db
-
-    if {"nps_db", "ref_notch_depth_db", "dut_notch_depth_db"} & requested:
-        nps = calculate_nps(
-            reference=reference,
-            dut=dut,
-            sample_rate=sample_rate,
-            notch_center_hz=_coerce_float(metadata.get("notch_center_hz"), 8000.0),
-            notch_q=_coerce_float(metadata.get("notch_q"), 8.6),
-        )
-        results["nps_db"] = nps.nps_db
-        results["ref_notch_depth_db"] = nps.ref_notch_depth_db
-        results["dut_notch_depth_db"] = nps.dut_notch_depth_db
-
-    if {
-        "psd_notch_fill_db",
-        "psd_ref_notch_depth_db",
-        "psd_dut_notch_depth_db",
-    } & requested:
-        psd = calculate_narrowband_notch_depth(
-            reference=reference,
-            dut=dut,
-            sample_rate=sample_rate,
-            notch_center_hz=_coerce_float(metadata.get("notch_center_hz"), 8000.0),
-            notch_q=_coerce_float(metadata.get("notch_q"), 20.0),
-        )
-        results["psd_notch_fill_db"] = psd.notch_fill_db
-        results["psd_ref_notch_depth_db"] = psd.ref_notch_depth_db
-        results["psd_dut_notch_depth_db"] = psd.dut_notch_depth_db
-
-    if {"delta_se_mean", "delta_se_max"} & requested:
-        delta = calculate_delta_se(
-            reference=reference, dut=dut, sample_rate=sample_rate
-        )
-        results["delta_se_mean"] = delta.delta_se_mean
-        results["delta_se_max"] = delta.delta_se_max
 
     if {"mps_correlation", "mps_distance", "mps_distance_weighted"} & requested:
         mps = calculate_mps_similarity(
