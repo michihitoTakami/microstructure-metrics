@@ -68,6 +68,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
     `--margin-ms` `--max-lag-ms`
   - THD: `--fundamental-freq` `--expected-level-dbfs`
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
+  - 可視化: `--plot` (MPS差分ヒートマップ / TFS相関時系列を保存), `--plot-dir` (プロット出力先ディレクトリ)
   - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
 - 例: JSON と Markdown を保存
 ```

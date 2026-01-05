@@ -6,7 +6,7 @@ This guide is for end users who measure and compare DAC/AMP devices using the CL
 - Pilot-tone-based alignment and drift estimation
 - Test signal generation (THD, pink-noise, AM/FM, TFS tones, transient clicks/bursts)
 - Metrics: THD+N, MPS, TFS, Transient
-- Reports in JSON/CSV/Markdown
+- Reports in JSON/CSV/Markdown, optional plots for MPS/TFS
 
 ## Prerequisites
 - Python 3.13+, [uv](https://github.com/astral-sh/uv)
@@ -28,7 +28,7 @@ uv sync
 4) Check drift
    - `uv run microstructure-metrics drift ref.aligned_ref.wav dut.aligned_dut.wav --json-output drift.json`
 5) Compute all metrics
-   - `uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav --output-json report.json --output-md report.md`
+   - `uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav --output-json report.json --output-md report.md --plot`
 
 ## CLI quick reference
 - Generate: `microstructure-metrics generate <signal_type> [options]`
@@ -48,6 +48,7 @@ See `docs/api-cli-reference.md` for full option lists (Japanese).
   - Aligned WAVs: `*.aligned_ref.wav`, `*.aligned_dut.wav`
   - Drift report (optional JSON)
   - Metrics report: JSON (default `metrics_report.json`), optional CSV/Markdown
+  - Plots (when `--plot`): MPS delta heatmap, TFS correlation time-series
 
 ## Related docs
 - Japanese overview: `README_JP.md`

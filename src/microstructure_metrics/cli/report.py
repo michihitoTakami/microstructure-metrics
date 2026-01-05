@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -28,8 +29,20 @@ from microstructure_metrics.metrics import (
     calculate_thd_n,
     calculate_transient_metrics,
 )
+from microstructure_metrics.visualization import (
+    save_mps_delta_heatmap,
+    save_tfs_correlation_timeseries,
+)
 
 DEFAULT_JSON = "metrics_report.json"
+
+
+@dataclass(frozen=True)
+class CalculatedMetrics:
+    thd: THDNResult
+    transient: TransientResult
+    mps: MPSSimilarityResult
+    tfs: TFSCorrelationResult
 
 
 @click.command(name="report")
@@ -51,6 +64,17 @@ DEFAULT_JSON = "metrics_report.json"
     "--output-md",
     type=click.Path(),
     help="Markdownレポートの出力パス（未指定なら出力しない）",
+)
+@click.option(
+    "--plot",
+    is_flag=True,
+    default=False,
+    help="MPS/TFSの可視化画像を出力する",
+)
+@click.option(
+    "--plot-dir",
+    type=click.Path(file_okay=False),
+    help="プロット画像の出力ディレクトリ（未指定時は --output-json と同じ場所に作成）",
 )
 @click.option(
     "--allow-resample",
@@ -219,6 +243,8 @@ def report(
     output_json: str,
     output_csv: str | None,
     output_md: str | None,
+    plot: bool,
+    plot_dir: str | None,
     allow_resample: bool,
     target_sample_rate: int | None,
     channel: int | None,
@@ -318,7 +344,26 @@ def report(
         mps_mod_weighting=mps_mod_weighting,
     )
 
-    report_payload = {
+    metrics_payload = _metrics_to_payload(metrics)
+
+    json_path = Path(output_json)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    plot_enabled = plot or plot_dir is not None
+    plot_payload: dict[str, object] | None = None
+    if plot_enabled:
+        resolved_plot_dir = (
+            Path(plot_dir)
+            if plot_dir is not None
+            else json_path.parent / f"{json_path.stem}_plots"
+        )
+        plot_payload = _generate_plots(
+            metrics=metrics,
+            plot_dir=resolved_plot_dir,
+        )
+        click.echo(f"プロットを書き出しました: {resolved_plot_dir}")
+
+    report_payload: dict[str, object] = {
         "sample_rate": sample_rate,
         "validation": {
             "is_valid": validation.is_valid,
@@ -327,18 +372,18 @@ def report(
         },
         "alignment": _alignment_summary(alignment, aligned_ref.shape[0]),
         "drift": drift_payload,
-        "metrics": metrics,
+        "metrics": metrics_payload,
     }
+    if plot_payload is not None:
+        report_payload["plots"] = plot_payload
 
-    json_path = Path(output_json)
-    json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2))
     click.echo(f"JSONレポートを書き出しました: {json_path}")
 
     if output_csv:
         csv_path = Path(output_csv)
         csv_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_csv(csv_path, metrics)
+        _write_csv(csv_path, metrics_payload)
         click.echo(f"CSVサマリを書き出しました: {csv_path}")
 
     if output_md:
@@ -369,8 +414,8 @@ def _calculate_metrics(
     mps_norm: str,
     mps_band_weighting: str,
     mps_mod_weighting: str,
-) -> dict[str, dict[str, object]]:
-    """各指標を計算し、JSONに載せやすい辞書へまとめる。"""
+) -> CalculatedMetrics:
+    """各指標を計算し、後続処理で利用しやすい形へまとめる。"""
     thd = calculate_thd_n(
         signal=aligned_dut,
         fundamental_freq=fundamental_freq,
@@ -404,11 +449,30 @@ def _calculate_metrics(
         sample_rate=sample_rate,
     )
 
+    return CalculatedMetrics(thd=thd, transient=transient, mps=mps, tfs=tfs)
+
+
+def _metrics_to_payload(metrics: CalculatedMetrics) -> dict[str, dict[str, object]]:
     return {
-        "thd_n": _thd_summary(thd),
-        "transient": _transient_summary(transient),
-        "mps": _mps_summary(mps),
-        "tfs": _tfs_summary(tfs),
+        "thd_n": _thd_summary(metrics.thd),
+        "transient": _transient_summary(metrics.transient),
+        "mps": _mps_summary(metrics.mps),
+        "tfs": _tfs_summary(metrics.tfs),
+    }
+
+
+def _generate_plots(*, metrics: CalculatedMetrics, plot_dir: Path) -> dict[str, str]:
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    mps_path = save_mps_delta_heatmap(
+        result=metrics.mps, path=plot_dir / "mps_delta_heatmap.png"
+    )
+    tfs_path = save_tfs_correlation_timeseries(
+        result=metrics.tfs, path=plot_dir / "tfs_correlation_timeseries.png"
+    )
+    return {
+        "plot_dir": str(plot_dir.resolve()),
+        "mps_delta_heatmap": str(mps_path.resolve()),
+        "tfs_correlation_timeseries": str(tfs_path.resolve()),
     }
 
 
@@ -554,6 +618,12 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
         lines.append(f"- Validation errors: {len(errors)}")
     lines.append("")
 
+    plots_obj = report_payload.get("plots")
+    if isinstance(plots_obj, dict):
+        plot_lines = _render_plot_section(plots_obj, path.parent)
+        if plot_lines:
+            lines.extend(plot_lines)
+
     metrics_obj = report_payload.get("metrics", {})
     if not isinstance(metrics_obj, dict):
         metrics_obj = {}
@@ -569,6 +639,56 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
         lines.append("")
 
     path.write_text("\n".join(lines))
+
+
+def _render_plot_section(plots: Mapping[str, object], base_dir: Path) -> list[str]:
+    lines: list[str] = []
+    entries: list[tuple[str, str]] = []
+    plot_dir_value = plots.get("plot_dir")
+    plot_dir_path = Path(str(plot_dir_value)) if plot_dir_value else None
+
+    for title, key in [
+        ("MPS Delta Heatmap", "mps_delta_heatmap"),
+        ("TFS Correlation", "tfs_correlation_timeseries"),
+    ]:
+        plot_path = _extract_plot_path(plots, key)
+        if plot_path is None:
+            continue
+        rendered = _path_for_markdown(Path(plot_path), base_dir)
+        entries.append((title, rendered))
+
+    if not entries:
+        return lines
+
+    lines.append("## PLOTS")
+    lines.append("")
+    if plot_dir_path is not None:
+        lines.append(f"- Plot directory: {_path_for_markdown(plot_dir_path, base_dir)}")
+        lines.append("")
+    for title, rendered_path in entries:
+        lines.append(f"### {title}")
+        lines.append(f"![{title}]({rendered_path})")
+        lines.append("")
+    return lines
+
+
+def _extract_plot_path(plots: Mapping[str, object], key: str) -> str | None:
+    value = plots.get(key)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Mapping):
+        nested = value.get("path")
+        if isinstance(nested, str):
+            return nested
+    return None
+
+
+def _path_for_markdown(target: Path, base_dir: Path) -> str:
+    resolved = target.resolve()
+    try:
+        return resolved.relative_to(base_dir.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
 
 
 def _flatten_metric(
