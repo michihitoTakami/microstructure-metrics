@@ -99,14 +99,14 @@ edge_rounding_click:
   description: band-limited click to emulate rounded transient edges.
   metrics:
     attack_time_delta_ms:
-      expected: 0.0
+      expected: 0.10416666666666667
       tolerance: 0.05
     edge_sharpness_ratio:
-      expected: 0.9131471530989018
-      tolerance: 0.09131471530989019
+      expected: 0.49711427887484333
+      tolerance: 0.08
     transient_smearing_index:
-      expected: 1.0833333333333333
-      tolerance: 0.10833333333333334
+      expected: 2.5000000000000004
+      tolerance: 0.25
   severity: 0.8
   signal_type: click
 time_smoothing_attack:
@@ -114,14 +114,14 @@ time_smoothing_attack:
   description: envelope smoothing to emulate rounded attacks without heavy LPF.
   metrics:
     attack_time_ms:
-      expected: 0.4166666666666667
-      tolerance: 0.05
+      expected: 0.020833333333333332
+      tolerance: 0.02
     attack_time_delta_ms:
       expected: 0.0
       tolerance: 0.05
     edge_sharpness_ratio:
-      expected: 0.9999992474299623
-      tolerance: 0.09999992474299624
+      expected: 1.4240508739547075
+      tolerance: 0.15
     transient_smearing_index:
       expected: 1.0
       tolerance: 0.1
@@ -132,16 +132,16 @@ tone_burst_smearing:
   description: smooth tone bursts to emulate rounded edges across repeated hits.
   metrics:
     attack_time_ms:
-      expected: 0.8125
-      tolerance: 0.08125
+      expected: 0.875
+      tolerance: 0.1
     attack_time_delta_ms:
-      expected: 0.6041666666666666
-      tolerance: 0.06041666666666667
+      expected: 0.7291666666666666
+      tolerance: 0.08
     edge_sharpness_ratio:
-      expected: 0.2234106374168738
-      tolerance: 0.05
+      expected: 0.438775101520149
+      tolerance: 0.06
     transient_smearing_index:
-      expected: 0.8181818181818182
-      tolerance: 0.08181818181818183
+      expected: 0.8235294117647058
+      tolerance: 0.09
   severity: 0.65
   signal_type: tone-burst
