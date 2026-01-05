@@ -224,6 +224,13 @@ DEFAULT_JSON = "metrics_report.json"
     show_default=True,
     help="帯域重み付け: none/energy(参照MPSのエネルギーで重み付け)",
 )
+@click.option(
+    "--mps-mod-weighting",
+    type=click.Choice(["none", "high_mod"]),
+    default="none",
+    show_default=True,
+    help="変調周波数の重み付け: none/high_mod(4Hz以上を強め、10Hz以上をさらに重視)",
+)
 def report(
     reference: str,
     dut: str,
@@ -256,6 +263,7 @@ def report(
     mps_scale: str,
     mps_norm: str,
     mps_band_weighting: str,
+    mps_mod_weighting: str,
 ) -> None:
     """リファレンス/DUT WAVを整列し、全指標を計算してレポートする。"""
     try:
@@ -329,6 +337,7 @@ def report(
         mps_scale=mps_scale,
         mps_norm=mps_norm,
         mps_band_weighting=mps_band_weighting,
+        mps_mod_weighting=mps_mod_weighting,
     )
 
     report_payload = {
@@ -383,6 +392,7 @@ def _calculate_metrics(
     mps_scale: str,
     mps_norm: str,
     mps_band_weighting: str,
+    mps_mod_weighting: str,
 ) -> dict[str, dict[str, object]]:
     """各指標を計算し、JSONに載せやすい辞書へまとめる。"""
     thd = calculate_thd_n(
@@ -429,6 +439,7 @@ def _calculate_metrics(
         mps_scale=cast(Literal["power", "log"], mps_scale),
         mps_norm=cast(Literal["global", "per_band", "none"], mps_norm),
         band_weighting=cast(Literal["none", "energy"], mps_band_weighting),
+        mod_weighting=cast(Literal["none", "high_mod"], mps_mod_weighting),
     )
     tfs = calculate_tfs_correlation(
         reference=aligned_ref,
@@ -530,6 +541,8 @@ def _mps_summary(result: MPSSimilarityResult) -> dict[str, object]:
     return {
         "mps_correlation": float(result.mps_correlation),
         "mps_distance": float(result.mps_distance),
+        "mps_distance_weighted": float(result.mps_distance_weighted),
+        "mps_mod_weighting": str(result.mod_weighting),
         "band_correlations": band_corr,
     }
 

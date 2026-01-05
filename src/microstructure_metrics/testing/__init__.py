@@ -49,6 +49,7 @@ _ALL_METRIC_KEYS = {
     "delta_se_max",
     "mps_correlation",
     "mps_distance",
+    "mps_distance_weighted",
     "psd_notch_fill_db",
     "psd_ref_notch_depth_db",
     "psd_dut_notch_depth_db",
@@ -752,12 +753,13 @@ def evaluate_metrics(
         results["delta_se_mean"] = delta.delta_se_mean
         results["delta_se_max"] = delta.delta_se_max
 
-    if {"mps_correlation", "mps_distance"} & requested:
+    if {"mps_correlation", "mps_distance", "mps_distance_weighted"} & requested:
         mps = calculate_mps_similarity(
             reference=reference, dut=dut, sample_rate=sample_rate
         )
         results["mps_correlation"] = mps.mps_correlation
         results["mps_distance"] = mps.mps_distance
+        results["mps_distance_weighted"] = mps.mps_distance_weighted
 
     if {"tfs_mean_correlation", "tfs_phase_coherence"} & requested:
         tfs = calculate_tfs_correlation(

@@ -60,10 +60,10 @@ def test_mps_detects_am_modulation_peak() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    band_mps = result.mps_matrix[band_idx]
+    band_mps = result.mps_power[band_idx]
     peak_mod_freq = float(result.mod_freqs[int(np.argmax(band_mps))])
 
-    assert result.mps_matrix.shape[0] == 48
+    assert result.mps_power.shape[0] == 48
     assert abs(peak_mod_freq - mod) <= 1.0
 
 
@@ -83,9 +83,13 @@ def test_mps_similarity_high_for_identical_signals() -> None:
 
     assert result.mps_correlation > 0.99
     assert result.mps_distance < 1e-12
+    assert result.mps_distance_weighted < 1e-12
     assert result.band_correlations
     peak_band = max(result.band_correlations.values())
     assert peak_band > 0.99
+    assert np.max(np.abs(result.delta_mps_db)) < 1e-9
+    assert result.mod_weights.shape == result.mod_freqs.shape
+    assert np.allclose(result.mod_weights, 1.0)
 
 
 def test_mps_similarity_degrades_when_modulation_removed() -> None:
@@ -114,7 +118,41 @@ def test_mps_similarity_degrades_when_modulation_removed() -> None:
 
     assert result.mps_correlation < 0.3
     assert result.mps_distance > 0.02
+    assert result.mps_distance_weighted > 0.02
     assert target_band < 0.3
+
+
+def test_mps_similarity_high_mod_weighting_emphasizes_high_mod_errors() -> None:
+    sr = 48_000
+    carrier = 1300.0
+    reference = _am_tone(
+        sample_rate=sr, duration=0.7, carrier_hz=carrier, mod_hz=12.0, depth=0.6
+    )
+    dut = _am_tone(
+        sample_rate=sr, duration=0.7, carrier_hz=carrier, mod_hz=0.0, depth=0.0
+    )
+
+    base = calculate_mps_similarity(
+        reference=reference,
+        dut=dut,
+        sample_rate=sr,
+        audio_freq_range=(300.0, 4000.0),
+        mod_freq_range=(0.5, 32.0),
+        mod_weighting="none",
+    )
+    weighted = calculate_mps_similarity(
+        reference=reference,
+        dut=dut,
+        sample_rate=sr,
+        audio_freq_range=(300.0, 4000.0),
+        mod_freq_range=(0.5, 32.0),
+        mod_weighting="high_mod",
+    )
+
+    assert base.mps_distance_weighted == base.mps_distance
+    assert weighted.mps_distance_weighted > base.mps_distance_weighted
+    assert weighted.mod_weighting == "high_mod"
+    assert np.max(weighted.mod_weights) == 4.0
 
 
 def test_mps_supports_log_modulation_axis() -> None:
@@ -134,10 +172,10 @@ def test_mps_supports_log_modulation_axis() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - 1200.0)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
     log_steps = np.diff(np.log(result.mod_freqs))
 
-    assert result.mps_matrix.shape[1] == 24
+    assert result.mps_power.shape[1] == 24
     assert abs(peak_mod - mod) <= 1.0
     assert np.allclose(log_steps, np.mean(log_steps), atol=1e-2)
 
@@ -157,8 +195,8 @@ def test_mps_mel_filterbank_runs() -> None:
         filterbank_kwargs={"order": 6},
     )
 
-    assert result.mps_matrix.shape[0] == 32
-    assert np.all(np.isfinite(result.mps_matrix))
+    assert result.mps_power.shape[0] == 32
+    assert np.all(np.isfinite(result.mps_power))
     diffs = np.diff(result.audio_freqs)
     assert np.all(diffs <= 0)
 
@@ -182,7 +220,7 @@ def test_mps_rectify_envelope_detects_modulation() -> None:
     )
 
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
     assert abs(peak_mod - mod) <= 1.0
 
 
@@ -256,6 +294,6 @@ def test_mps_handles_am_fm_composite_on_log_grid() -> None:
         mod_scale="log",
     )
     band_idx = int(np.argmin(np.abs(result.audio_freqs - carrier)))
-    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_matrix[band_idx]))])
+    peak_mod = float(result.mod_freqs[int(np.argmax(result.mps_power[band_idx]))])
 
     assert abs(peak_mod - am) <= 1.0
