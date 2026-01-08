@@ -23,12 +23,14 @@ from microstructure_metrics.metrics import (
     BassResult,
     BinauralResult,
     MPSSimilarityResult,
+    ResidualMicrostructureResult,
     TFSCorrelationResult,
     THDNResult,
     TransientResult,
     calculate_binaural_cue_preservation,
     calculate_low_freq_complex_reconstruction,
     calculate_mps_similarity,
+    calculate_residual_microstructure,
     calculate_tfs_correlation,
     calculate_thd_n,
     calculate_transient_metrics,
@@ -48,6 +50,7 @@ class CalculatedMetrics:
     mps: MPSSimilarityResult
     tfs: TFSCorrelationResult
     bass: BassResult
+    residual: ResidualMicrostructureResult
 
 
 MetricsPayload = dict[str, object]
@@ -587,6 +590,11 @@ def _calculate_metrics(
         harmonic_max_order=bass_harmonic_max_order,
         fundamental_search_hz=bass_fundamental_range,
     )
+    residual = calculate_residual_microstructure(
+        reference=aligned_ref,
+        dut=aligned_dut,
+        sample_rate=sample_rate,
+    )
 
     return CalculatedMetrics(
         thd=thd,
@@ -594,6 +602,7 @@ def _calculate_metrics(
         mps=mps,
         tfs=tfs,
         bass=bass,
+        residual=residual,
     )
 
 
@@ -604,6 +613,7 @@ def _metrics_to_payload(metrics: CalculatedMetrics) -> MetricsPayload:
         "mps": _mps_summary(metrics.mps),
         "tfs": _tfs_summary(metrics.tfs),
         "bass": _bass_summary(metrics.bass),
+        "residual": _residual_summary(metrics.residual),
     }
 
 
@@ -705,6 +715,34 @@ def _bass_summary(result: BassResult) -> dict[str, object]:
             float(result.fundamental_search_hz[1]),
         ],
         "used_cycles": int(result.used_cycles),
+    }
+
+
+def _residual_summary(result: ResidualMicrostructureResult) -> dict[str, object]:
+    return {
+        "fit": {
+            "delay_samples": float(result.delay_samples),
+            "scale": float(result.scale),
+            "used_samples": int(result.used_samples),
+        },
+        "basic": {
+            "residual_rms": float(result.residual_rms),
+            "residual_peak": float(result.residual_peak),
+        },
+        "burstiness": {
+            "kurtosis": float(result.kurtosis),
+            "crest_factor": float(result.crest_factor),
+            "p99_abs": float(result.p99_abs),
+        },
+        "modulation": {
+            "high_mod_ratio_4_64": float(result.high_mod_ratio_4_64),
+            "high_mod_ratio_10_64": float(result.high_mod_ratio_10_64),
+        },
+        "whiteness": {
+            "spectral_flatness": float(result.spectral_flatness),
+            "autocorr_peak_excess": float(result.autocorr_peak_excess),
+            "autocorr_peak_lag_ms": float(result.autocorr_peak_lag_ms),
+        },
     }
 
 

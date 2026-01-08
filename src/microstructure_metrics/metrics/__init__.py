@@ -16,6 +16,10 @@ from microstructure_metrics.metrics.mps import (
     calculate_mps,
     calculate_mps_similarity,
 )
+from microstructure_metrics.metrics.residual import (
+    ResidualMicrostructureResult,
+    calculate_residual_microstructure,
+)
 from microstructure_metrics.metrics.tfs import (
     TFSComponents,
     TFSCorrelationResult,
@@ -48,6 +52,8 @@ __all__ = [
     "TFSCorrelationResult",
     "extract_tfs",
     "calculate_tfs_correlation",
+    "ResidualMicrostructureResult",
+    "calculate_residual_microstructure",
     "DistributionStats",
     "TransientEvent",
     "TransientParams",
