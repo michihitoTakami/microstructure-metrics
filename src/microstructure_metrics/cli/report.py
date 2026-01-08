@@ -20,10 +20,12 @@ from microstructure_metrics.alignment import (
 )
 from microstructure_metrics.io import load_audio_pair
 from microstructure_metrics.metrics import (
+    BinauralResult,
     MPSSimilarityResult,
     TFSCorrelationResult,
     THDNResult,
     TransientResult,
+    calculate_binaural_cue_preservation,
     calculate_mps_similarity,
     calculate_tfs_correlation,
     calculate_thd_n,
@@ -45,7 +47,7 @@ class CalculatedMetrics:
     tfs: TFSCorrelationResult
 
 
-MetricsPayload = dict[str, dict[str, object]]
+MetricsPayload = dict[str, object]
 MultiChannelMetricsPayload = dict[str, MetricsPayload]
 
 
@@ -93,10 +95,13 @@ MultiChannelMetricsPayload = dict[str, MetricsPayload]
 )
 @click.option(
     "--channels",
-    type=click.Choice(["stereo", "mid", "side"]),
+    type=click.Choice(["stereo", "mid", "side", "ch0", "ch1"]),
     default="stereo",
     show_default=True,
-    help="入力処理モード（I/Oは常に2ch。mid/sideは2chへ写像して解析）",
+    help=(
+        "入力処理モード（I/Oは常に2ch）。"
+        "mid/sideは2chへ写像、ch0/ch1は指定chを複製して解析。"
+    ),
 )
 @click.option(
     "--align/--no-align",
@@ -267,7 +272,7 @@ def report(
     plot_dir: str | None,
     allow_resample: bool,
     target_sample_rate: int | None,
-    channels: Literal["stereo", "mid", "side"],
+    channels: Literal["stereo", "mid", "side", "ch0", "ch1"],
     align: bool,
     pilot_freq: float,
     pilot_threshold: float,
@@ -376,6 +381,22 @@ def report(
     metrics_payload: MultiChannelMetricsPayload = {
         name: _metrics_to_payload(metric) for name, metric in metrics_by_channel.items()
     }
+    binaural_result: BinauralResult | None
+    binaural_error: str | None = None
+    try:
+        binaural_result = calculate_binaural_cue_preservation(
+            reference_lr=aligned_ref,
+            dut_lr=aligned_dut,
+            sample_rate=sample_rate,
+        )
+    except ValueError as exc:
+        binaural_result = None
+        binaural_error = str(exc)
+    metrics_payload["binaural"] = (
+        _binaural_summary(binaural_result)
+        if binaural_result is not None
+        else _binaural_unavailable(binaural_error)
+    )
 
     json_path = Path(output_json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -493,7 +514,7 @@ def _calculate_metrics(
     return CalculatedMetrics(thd=thd, transient=transient, mps=mps, tfs=tfs)
 
 
-def _metrics_to_payload(metrics: CalculatedMetrics) -> dict[str, dict[str, object]]:
+def _metrics_to_payload(metrics: CalculatedMetrics) -> MetricsPayload:
     return {
         "thd_n": _thd_summary(metrics.thd),
         "transient": _transient_summary(metrics.transient),
@@ -594,6 +615,40 @@ def _tfs_summary(result: TFSCorrelationResult) -> dict[str, object]:
     }
 
 
+def _binaural_summary(result: BinauralResult) -> dict[str, object]:
+    band_payload = {
+        f"{stat.center_freq_hz:.1f}": {
+            "median_abs_delta_itd_ms": float(stat.median_abs_delta_itd_ms),
+            "median_abs_delta_ild_db": float(stat.median_abs_delta_ild_db),
+            "median_iacc": float(stat.median_iacc),
+        }
+        for stat in result.band_stats
+    }
+    return {
+        "summary": {
+            "median_abs_delta_itd_ms": float(result.median_abs_delta_itd_ms),
+            "p95_abs_delta_itd_ms": float(result.p95_abs_delta_itd_ms),
+            "itd_outlier_rate": float(result.itd_outlier_rate),
+            "median_abs_delta_ild_db": float(result.median_abs_delta_ild_db),
+            "p95_abs_delta_ild_db": float(result.p95_abs_delta_ild_db),
+            "iacc_p05": float(result.iacc_p05),
+            "delta_iacc_median": float(result.delta_iacc_median),
+            "frames_per_band": int(result.frames_per_band),
+            "used_frames": int(result.used_frames),
+            "frame_length_ms": float(result.frame_length_ms),
+            "frame_hop_ms": float(result.frame_hop_ms),
+            "max_itd_ms": float(result.max_itd_ms),
+            "envelope_threshold_db": float(result.envelope_threshold_db),
+            "itd_outlier_threshold_ms": float(result.itd_outlier_threshold_ms),
+        },
+        "band_stats": band_payload,
+    }
+
+
+def _binaural_unavailable(reason: str | None) -> dict[str, object]:
+    return {"available": False, "reason": reason or "stereo processing required"}
+
+
 def _transient_summary(result: TransientResult) -> dict[str, object]:
     return {
         "low_level_attack_time_ref_ms": float(result.low_level_attack_time_ref_ms),
@@ -656,7 +711,14 @@ def _write_csv(path: Path, metrics: MultiChannelMetricsPayload) -> None:
     rows: list[tuple[str, str, object]] = []
     for channel_name, channel_metrics in metrics.items():
         for metric_name, metric_values in channel_metrics.items():
-            rows.extend(_flatten_metric(f"{channel_name}.{metric_name}", metric_values))
+            if not isinstance(metric_values, Mapping):
+                continue
+            rows.extend(
+                _flatten_metric(
+                    f"{channel_name}.{metric_name}",
+                    cast(Mapping[str, object], metric_values),
+                )
+            )
 
     with path.open("w", newline="") as fp:
         writer = csv.writer(fp)
@@ -702,7 +764,10 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
             lines.append("")
             lines.append("| key | value |")
             lines.append("| --- | --- |")
-            for _, key, value in _flatten_metric(metric_name, metric_values):
+            for _, key, value in _flatten_metric(
+                metric_name,
+                cast(Mapping[str, object], metric_values),
+            ):
                 lines.append(f"| {key} | {value} |")
             lines.append("")
 

@@ -75,7 +75,10 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert json_path.exists()
     payload = json.loads(json_path.read_text())
-    assert set(payload["metrics"].keys()) == {"ch0", "ch1"}
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural"}
+    binaural = payload["metrics"]["binaural"]
+    assert "summary" in binaural
+    assert "median_abs_delta_itd_ms" in binaural["summary"]
     ch0 = payload["metrics"]["ch0"]
     for key in ["thd_n", "transient", "mps", "tfs"]:
         assert key in ch0
@@ -144,7 +147,7 @@ def test_cli_report_channels_stereo(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(json_path.read_text())
-    assert set(payload["metrics"].keys()) == {"ch0", "ch1"}
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural"}
     for channel_key in ["ch0", "ch1"]:
         ch_metrics = payload["metrics"][channel_key]
         for key in ["thd_n", "transient", "mps", "tfs"]:
@@ -184,6 +187,7 @@ def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:
     # no-align でも metrics が生成され、alignment は delay 0 のダミー
     assert payload["alignment"]["delay_samples"] == 0.0
     assert payload["metrics"]["ch0"]["thd_n"]
+    assert "binaural" in payload["metrics"]
 
 
 def test_cli_report_fails_without_resample_permission(tmp_path: Path) -> None:

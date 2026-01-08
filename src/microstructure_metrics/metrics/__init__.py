@@ -1,5 +1,10 @@
 """Metric implementations."""
 
+from microstructure_metrics.metrics.binaural import (
+    BinauralBandStats,
+    BinauralResult,
+    calculate_binaural_cue_preservation,
+)
 from microstructure_metrics.metrics.mps import (
     MPSResult,
     MPSSimilarityResult,
@@ -28,6 +33,9 @@ __all__ = [
     "MPSSimilarityResult",
     "calculate_mps",
     "calculate_mps_similarity",
+    "BinauralBandStats",
+    "BinauralResult",
+    "calculate_binaural_cue_preservation",
     "TFSComponents",
     "TFSCorrelationResult",
     "extract_tfs",

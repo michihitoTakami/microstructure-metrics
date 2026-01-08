@@ -40,6 +40,12 @@
 - 入力条件: 単一インパルスや急峻ステップなどエッジを含む刺激（`signal-specifications.md`参照）。定常ノイズやサイン波では意味を持たない。
 - ノイズ/位相ばらつき耐性: 包絡エネルギーを平滑してから特徴抽出。イベント数が0の場合は指標は0となる。
 
+### Binaural Cue Preservation (BCP)
+- 内容: 帯域×時間で ITD/ILD/IACC を推定し、参照との差分を分位点で集約。像の揺れ・広がりを捉える。
+- 主指標: `median_abs_delta_itd_ms`, `p95_abs_delta_itd_ms`, `itd_outlier_rate`(>|0.2|ms率)、`median_abs_delta_ild_db`, `p95_abs_delta_ild_db`, `iacc_p05`, `delta_iacc_median`。
+- 目安: `median_abs_delta_itd_ms` が 0.2 ms 未満なら定位はほぼ安定。`itd_outlier_rate` が高いと瞬間的な定位崩れを疑う。`iacc_p05` が 0.7 未満なら像の締まり低下の可能性。
+- 入力条件: ステレオ信号必須。低包絡フレームは除外されるため、十分なSNRが必要。
+
 ## 典型的な読み解き例
 - 「MPS 相関 0.75, 距離大、TFS 相関 0.8」: テクスチャと位相微細構造がともに崩れており、フィードバックや帯域制限の影響が考えられる。
 - 「THD+N/SINAD 良好だが MPS/TFS が劣化」: 定常指標では見えない微細構造の劣化。駆動系やフィルタ設定を再確認。
