@@ -5,7 +5,7 @@ This guide is for end users who measure and compare DAC/AMP devices using the CL
 ## What you get
 - Pilot-tone-based alignment and drift estimation
 - Test signal generation (THD, pink-noise, AM/FM, TFS tones, transient clicks/bursts)
-- Metrics: THD+N, MPS, TFS, Transient
+- Metrics: THD+N, MPS, TFS, Transient, LFCR, BCP, RMI
 - Reports in JSON/CSV/Markdown, optional plots for MPS/TFS
 
 ## Prerequisites

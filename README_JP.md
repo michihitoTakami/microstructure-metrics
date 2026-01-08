@@ -1,7 +1,7 @@
 # Microstructure Metrics (日本語)
 
 人間知覚指向のDAC/AMPマイクロダイナミクス評価スイート。
-パイロットトーンを用いたアライメント・ドリフト推定・信号生成から、THD+N / MPS / TFS / Transient を一括算出するオフラインパイプラインを提供します。
+パイロットトーンを用いたアライメント・ドリフト推定・信号生成から、THD+N / MPS / TFS / Transient / LFCR / BCP / RMI を一括算出するオフラインパイプラインを提供します。
 
 ## なぜ必要か
 
@@ -19,6 +19,9 @@
 | Modulation Power Spectrum (MPS) | 変調テクスチャの保持度（相関/距離） |
 | Temporal Fine Structure (TFS) | 高域微細位相の相関・群遅延ばらつき |
 | Transient / エッジ丸まり | インパルス/クリックの立ち上がり鋭さ・スメア |
+| Low-Frequency Complex Reconstruction (LFCR) | 低域の波形形状・倍音位相の整合（複雑ベース復元） |
+| Binaural Cue Preservation (BCP) | ITD/ILD/IACC など両耳手がかりの保存度（定位/像の安定） |
+| Residual Microstructure Information (RMI) | 残差が「ノイズ」か「時間構造を持つ誤差」か（突発性/白色性/変調構造） |
 
 ## 動作環境
 

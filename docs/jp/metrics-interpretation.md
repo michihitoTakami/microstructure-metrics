@@ -1,7 +1,7 @@
 # 指標の読み解きガイド
 
 ## 目的
-- 本ツールが出力する指標（THD+N, MPS, TFS, Transient）の意味と読み方を整理し、機器比較や異常検出に活用する。
+- 本ツールが出力する指標（THD+N, MPS, TFS, Transient, LFCR, BCP, RMI）の意味と読み方を整理し、機器比較や異常検出に活用する。
 - 出力は `report` サブコマンドの JSON/CSV/Markdown に含まれる値を前提とする。
 
 ## 共通の見方
@@ -13,6 +13,9 @@
 - テクスチャ・変調差分 → MPS。
 - 高域微細位相の安定性 → TFS。
 - エッジ丸まり・過渡スメア → Transient（インパルス/エッジ刺激が必須）。
+- 低域の複雑波形の復元 → LFCR（複雑ベース/キック+ベース等）。
+- 両耳手がかり（像の安定） → BCP（ステレオ必須）。
+- 差分が「ただのノイズ」か「時間構造を持つ誤差」か → RMI（残差の突発性/白色性/変調構造）。
 - `docs/*/signal-specifications.md` にある想定刺激で実行すること。異なる信号で実行すると値が無意味になる。
 
 ## 指標別のポイント
@@ -52,6 +55,16 @@
 - 主指標: `median_abs_delta_itd_ms`, `p95_abs_delta_itd_ms`, `itd_outlier_rate`(>|0.2|ms率)、`median_abs_delta_ild_db`, `p95_abs_delta_ild_db`, `iacc_p05`, `delta_iacc_median`。
 - 目安: `median_abs_delta_itd_ms` が 0.2 ms 未満なら定位はほぼ安定。`itd_outlier_rate` が高いと瞬間的な定位崩れを疑う。`iacc_p05` が 0.7 未満なら像の締まり低下の可能性。
 - 入力条件: ステレオ信号必須。低包絡フレームは除外されるため、十分なSNRが必要。
+
+### Residual Microstructure Information (RMI)
+- 内容: 最良線形一致（スケール a と微小遅延 Δ）を除去した残差 \(r(t)=dut(t)-a\cdot ref(t-\Delta)\) を作り、残差が「ノイズ的」か「時間構造を持つ誤差」かを評価する。
+- 出力パス: `metrics.ch0.residual.*` / `metrics.ch1.residual.*`（レポートJSON。CSV/MDでは `residual.fit.delay_samples` のようにフラット化）。
+- burstiness（突発性）: `burstiness.kurtosis`, `burstiness.crest_factor`, `burstiness.p99_abs`
+  - 目安: リンギング/グリッチ/局所イベントが混ざると増えやすい。白色ノイズ的な差分では相対的に低い傾向。
+- whiteness（白色性）: `whiteness.spectral_flatness`（1に近いほどフラット）, `whiteness.autocorr_peak_excess`（0に近いほど白色）, `whiteness.autocorr_peak_lag_ms`
+  - 目安: 構造化誤差（リンギング等）では自己相関ピークが出て `autocorr_peak_excess` が増える。白色ノイズ的な差分では `spectral_flatness` が高くなりやすい。
+- modulation（変調構造）: `modulation.high_mod_ratio_4_64`, `modulation.high_mod_ratio_10_64`
+  - 目安: 残差包絡の高変調成分が増えると比率が上がる（“微細なゆらぎ/周期性の混入”のサインになりうる）。
 
 ## 典型的な読み解き例
 - 「MPS 相関 0.75, 距離大、TFS 相関 0.8」: テクスチャと位相微細構造がともに崩れており、フィードバックや帯域制限の影響が考えられる。
