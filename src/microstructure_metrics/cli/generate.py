@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import click
+import numpy as np
 import soundfile as sf
 
 from microstructure_metrics.signals import (
@@ -341,18 +342,20 @@ def generate(
 
     def _write_one(*, result: SignalBuildResult, wav_path: Path) -> None:
         wav_path.parent.mkdir(parents=True, exist_ok=True)
+        # Backward-compat is intentionally dropped: always output stereo WAV.
+        data = np.stack([result.data, result.data], axis=1)
+        metadata = dict(result.metadata)
+        metadata["channels"] = 2
         sf.write(
             wav_path,
-            result.data,
+            data,
             samplerate=common.sample_rate,
             subtype=subtype_for_bit_depth(common.normalized_bit_depth()),
         )
         click.echo(f"WAVを書き出しました: {wav_path}")
         if with_metadata:
             metadata_path = wav_path.with_suffix(".json")
-            metadata_path.write_text(
-                json.dumps(result.metadata, ensure_ascii=False, indent=2)
-            )
+            metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
             click.echo(f"メタデータを書き出しました: {metadata_path}")
 
     # Q sweep: generate multiple files when multiple --q is provided for notched-noise.

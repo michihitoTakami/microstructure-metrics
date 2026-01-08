@@ -2,7 +2,7 @@
   "signal_type": "pink_noise",
   "sample_rate": 48000,
   "bit_depth": "24bit",
-  "channels": 1,
+  "channels": 2,
   "duration_sec": 2.4,
   "pilot_tone_freq_hz": 1000.0,
   "pilot_duration_ms": 100,

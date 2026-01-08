@@ -18,6 +18,8 @@ from microstructure_metrics.io.validation import (
     validate_audio_pair,
 )
 
+ChannelsMode = Literal["stereo", "mid", "side"]
+
 
 def load_audio_pair(
     reference_path: str | Path,
@@ -26,7 +28,7 @@ def load_audio_pair(
     validate: bool = True,
     allow_resample: bool = False,
     target_sample_rate: int | None = None,
-    channel: int | None = None,
+    channels: ChannelsMode = "stereo",
     remove_dc: bool = True,
     dc_method: Literal["mean", "highpass"] = "mean",
     dc_cutoff_hz: float = 10.0,
@@ -48,13 +50,13 @@ def load_audio_pair(
     pre_warnings: list[str] = []
     pre_errors: list[str] = []
 
-    ref_data, warning = _select_channel(ref_data, channel)
-    if warning:
-        pre_warnings.append(f"reference: {warning}")
+    ref_data, ref_warning = _select_channels(ref_data, channels=channels)
+    if ref_warning:
+        pre_warnings.append(f"reference: {ref_warning}")
 
-    dut_data, warning = _select_channel(dut_data, channel)
-    if warning:
-        pre_warnings.append(f"dut: {warning}")
+    dut_data, dut_warning = _select_channels(dut_data, channels=channels)
+    if dut_warning:
+        pre_warnings.append(f"dut: {dut_warning}")
 
     target_sr = target_sample_rate or ref_sr
     if allow_resample or target_sample_rate is not None:
@@ -120,38 +122,65 @@ def _read_audio(path: Path) -> tuple[np.ndarray, int, int]:
     return data.astype(np.float64), sample_rate, bit_depth
 
 
-def _select_channel(
-    data: np.ndarray, channel: int | None
+def _select_channels(
+    data: np.ndarray, *, channels: ChannelsMode
 ) -> tuple[np.ndarray, str | None]:
-    if data.ndim == 1:
-        return data.astype(np.float64), None
-    channels = data.shape[1]
-    if channels == 1:
-        return data[:, 0].astype(np.float64), None
-    if channel is None:
-        return data[:, 0].astype(np.float64), "stereo input; using channel 0"
-    if not 0 <= channel < channels:
-        raise ValueError(f"channel index must be in [0, {channels - 1}]")
-    return data[:, channel].astype(np.float64), None
+    """Channel selection/downmix strategy.
+
+    後方互換は捨て、I/Oは常に2chへ正規化する。
+    - mono入力: stereoとして複製
+    - 2ch以上: 先頭2chのみ使用
+    """
+    arr = np.asarray(data, dtype=np.float64)
+    warning: str | None = None
+    if arr.ndim == 1:
+        arr2 = np.stack([arr, arr], axis=1)
+        warning = "mono input; duplicated to stereo"
+    else:
+        if arr.shape[1] == 1:
+            arr2 = np.stack([arr[:, 0], arr[:, 0]], axis=1)
+            warning = "single-channel input; duplicated to stereo"
+        else:
+            if arr.shape[1] > 2:
+                warning = "multi-channel input; using first 2 channels"
+            arr2 = arr[:, :2]
+
+    if channels == "stereo":
+        return arr2.astype(np.float64), warning
+    if channels == "mid":
+        mid = 0.5 * (arr2[:, 0] + arr2[:, 1])
+        stereo_mid = np.stack([mid, mid], axis=1)
+        return stereo_mid.astype(np.float64), warning
+    if channels == "side":
+        side = 0.5 * (arr2[:, 0] - arr2[:, 1])
+        stereo_side = np.stack([side, -side], axis=1)
+        return stereo_side.astype(np.float64), warning
+    raise ValueError(f"Unsupported channels mode: {channels}")
 
 
 def _compute_metadata(
     data: np.ndarray, *, sample_rate: int, bit_depth: int
 ) -> AudioMetadata:
     duration = data.shape[0] / sample_rate if sample_rate > 0 else 0.0
-    peak = float(np.max(np.abs(data))) if data.size else 0.0
-    rms = (
-        float(np.sqrt(np.mean(np.square(data), dtype=np.float64))) if data.size else 0.0
-    )
-    abs_data = np.abs(data) if data.size else np.array([], dtype=np.float64)
-    median = float(np.median(abs_data)) if abs_data.size else 0.0
-    p95 = float(np.percentile(abs_data, 95)) if abs_data.size else 0.0
-    dc = float(np.mean(data)) if data.size else 0.0
+    channels = 1 if data.ndim == 1 else data.shape[1]
+    flattened = data if data.ndim == 1 else data.reshape(-1, channels)
+    peak = float(np.max(np.abs(flattened))) if flattened.size else 0.0
+    if flattened.size:
+        rms = float(np.sqrt(np.mean(np.square(flattened), dtype=np.float64)))
+        abs_data = np.abs(flattened)
+        median = float(np.median(abs_data))
+        p95 = float(np.percentile(abs_data, 95))
+        dc = float(np.mean(flattened))
+    else:
+        rms = 0.0
+        median = 0.0
+        p95 = 0.0
+        dc = 0.0
     has_clipping = peak >= 0.999
     return AudioMetadata(
         sample_rate=sample_rate,
         bit_depth=bit_depth,
-        channels=1,
+        channels=int(channels),
         duration_sec=duration,
         peak_amplitude=peak,
         rms_amplitude=rms,

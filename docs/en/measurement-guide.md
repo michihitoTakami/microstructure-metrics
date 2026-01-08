@@ -8,7 +8,7 @@ Ensure repeatable offline evaluation by standardizing playback/recording conditi
 - Sample rate: set both playback and capture to 48 kHz. Use 96 kHz only when the provided signal explicitly targets high-band/TFS validation; higher rates increase drift sensitivity and file size.
 - Bit depth: configure 24-bit (or 32-bit float) end-to-end. Disable SRC/dithering in players unless explicitly needed.
 - Processing: disable all DSP/EQ/AGC/noise suppression in OS, driver, and player.
-- Channel handling: use mono chain; if stereo capture is unavoidable, keep identical content on L/R and analyze per channel.
+- Channel handling: use stereo (2ch) chain by default. Mono inputs are duplicated to stereo internally.
 
 ## Playback chain
 - Player: use bit-perfect mode (e.g., exclusive/wasapi/alsa `hw:`). Avoid normalizers or volume leveling.
@@ -18,7 +18,7 @@ Ensure repeatable offline evaluation by standardizing playback/recording conditi
 ## Capture chain
 - Interface: set the same sample rate/bit depth as playback; lock to the same clock when possible.
 - Gain staging: keep at least 6 dB headroom; confirm no ADC clipping during pilot tone.
-- File format: capture to WAV PCM 24-bit or 32-bit float; mono preferred.
+- File format: capture to WAV PCM 24-bit or 32-bit float; stereo (2ch) preferred.
 - Noise floor: verify tail silence RMS to confirm environment and interface noise are acceptable.
 
 ## Operational steps

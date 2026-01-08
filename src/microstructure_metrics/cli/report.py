@@ -45,6 +45,10 @@ class CalculatedMetrics:
     tfs: TFSCorrelationResult
 
 
+MetricsPayload = dict[str, dict[str, object]]
+MultiChannelMetricsPayload = dict[str, MetricsPayload]
+
+
 @click.command(name="report")
 @click.argument("reference", type=click.Path(exists=True, dir_okay=False))
 @click.argument("dut", type=click.Path(exists=True, dir_okay=False))
@@ -88,9 +92,11 @@ class CalculatedMetrics:
     help="リサンプル先サンプルレート（未指定なら reference の SR を優先）",
 )
 @click.option(
-    "--channel",
-    type=click.IntRange(min=0),
-    help="ステレオ入力時に使用するチャンネル（未指定ならch0）",
+    "--channels",
+    type=click.Choice(["stereo", "mid", "side"]),
+    default="stereo",
+    show_default=True,
+    help="入力処理モード（I/Oは常に2ch。mid/sideは2chへ写像して解析）",
 )
 @click.option(
     "--align/--no-align",
@@ -261,7 +267,7 @@ def report(
     plot_dir: str | None,
     allow_resample: bool,
     target_sample_rate: int | None,
-    channel: int | None,
+    channels: Literal["stereo", "mid", "side"],
     align: bool,
     pilot_freq: float,
     pilot_threshold: float,
@@ -294,7 +300,7 @@ def report(
             dut_path=dut,
             allow_resample=allow_resample,
             target_sample_rate=target_sample_rate,
-            channel=channel,
+            channels=channels,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -338,47 +344,56 @@ def report(
         )
         alignment = None
 
-    metrics = _calculate_metrics(
-        aligned_ref=aligned_ref,
-        aligned_dut=aligned_dut,
-        sample_rate=sample_rate,
-        fundamental_freq=fundamental_freq,
-        expected_level_dbfs=expected_level_dbfs,
-        transient_smoothing_ms=transient_smoothing_ms,
-        transient_asymmetry_window_ms=transient_asymmetry_window_ms,
-        mps_filterbank=mps_filterbank,
-        mps_filterbank_kwargs={
-            "order": mps_filterbank_order,
-            "bandwidth_scale": mps_filterbank_bandwidth_scale,
-        },
-        mps_envelope_method=mps_envelope_method,
-        mps_envelope_lpf_hz=mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None,
-        mps_envelope_lpf_order=mps_envelope_lpf_order,
-        mps_mod_scale=mps_mod_scale,
-        mps_num_mod_bins=mps_num_mod_bins,
-        mps_scale=mps_scale,
-        mps_norm=mps_norm,
-        mps_band_weighting=mps_band_weighting,
-        mps_mod_weighting=mps_mod_weighting,
-    )
-
-    metrics_payload = _metrics_to_payload(metrics)
+    # Backward-compat is intentionally dropped: aligned_ref/dut are always 2ch.
+    metrics_by_channel: dict[str, CalculatedMetrics] = {}
+    for idx in range(aligned_ref.shape[1]):
+        key = f"ch{idx}"
+        metrics_by_channel[key] = _calculate_metrics(
+            aligned_ref=aligned_ref[:, idx],
+            aligned_dut=aligned_dut[:, idx],
+            sample_rate=sample_rate,
+            fundamental_freq=fundamental_freq,
+            expected_level_dbfs=expected_level_dbfs,
+            transient_smoothing_ms=transient_smoothing_ms,
+            transient_asymmetry_window_ms=transient_asymmetry_window_ms,
+            mps_filterbank=mps_filterbank,
+            mps_filterbank_kwargs={
+                "order": mps_filterbank_order,
+                "bandwidth_scale": mps_filterbank_bandwidth_scale,
+            },
+            mps_envelope_method=mps_envelope_method,
+            mps_envelope_lpf_hz=mps_envelope_lpf_hz
+            if mps_envelope_lpf_hz > 0
+            else None,
+            mps_envelope_lpf_order=mps_envelope_lpf_order,
+            mps_mod_scale=mps_mod_scale,
+            mps_num_mod_bins=mps_num_mod_bins,
+            mps_scale=mps_scale,
+            mps_norm=mps_norm,
+            mps_band_weighting=mps_band_weighting,
+            mps_mod_weighting=mps_mod_weighting,
+        )
+    metrics_payload: MultiChannelMetricsPayload = {
+        name: _metrics_to_payload(metric) for name, metric in metrics_by_channel.items()
+    }
 
     json_path = Path(output_json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
 
     plot_enabled = plot or plot_dir is not None
-    plot_payload: dict[str, str] | None = None
+    plot_payload: dict[str, object] | None = None
     if plot_enabled:
         resolved_plot_dir = (
             Path(plot_dir)
             if plot_dir is not None
             else json_path.parent / f"{json_path.stem}_plots"
         )
-        plot_payload = _generate_plots(
-            metrics=metrics,
-            plot_dir=resolved_plot_dir,
-        )
+        plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
+        for name, metric in metrics_by_channel.items():
+            plot_payload[name] = _generate_plots(
+                metrics=metric,
+                plot_dir=resolved_plot_dir / name,
+            )
         click.echo(f"プロットを書き出しました: {resolved_plot_dir}")
 
     report_payload: dict[str, object] = {
@@ -388,7 +403,11 @@ def report(
             "warnings": validation.warnings,
             "errors": validation.errors,
         },
-        "alignment": _alignment_summary(alignment, aligned_ref.shape[0]),
+        "alignment": {
+            **_alignment_summary(alignment, aligned_ref.shape[0]),
+            "shared_across_channels": True,
+            "channels_mode": channels,
+        },
         "drift": drift_payload,
         "metrics": metrics_payload,
     }
@@ -633,10 +652,11 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
     }
 
 
-def _write_csv(path: Path, metrics: dict[str, dict[str, object]]) -> None:
+def _write_csv(path: Path, metrics: MultiChannelMetricsPayload) -> None:
     rows: list[tuple[str, str, object]] = []
-    for metric_name, metric_values in metrics.items():
-        rows.extend(_flatten_metric(metric_name, metric_values))
+    for channel_name, channel_metrics in metrics.items():
+        for metric_name, metric_values in channel_metrics.items():
+            rows.extend(_flatten_metric(f"{channel_name}.{metric_name}", metric_values))
 
     with path.open("w", newline="") as fp:
         writer = csv.writer(fp)
@@ -668,16 +688,23 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
     metrics_obj = report_payload.get("metrics", {})
     if not isinstance(metrics_obj, dict):
         metrics_obj = {}
-    for metric_name, metric_values in metrics_obj.items():
-        if not isinstance(metric_values, dict):
+
+    # Always multi-channel: metrics[channel][metric] = values
+    for channel_name, channel_metrics in metrics_obj.items():
+        if not isinstance(channel_metrics, dict):
             continue
-        lines.append(f"## {metric_name.upper()}")
+        lines.append(f"## {channel_name}")
         lines.append("")
-        lines.append("| key | value |")
-        lines.append("| --- | --- |")
-        for _, key, value in _flatten_metric(metric_name, metric_values):
-            lines.append(f"| {key} | {value} |")
-        lines.append("")
+        for metric_name, metric_values in channel_metrics.items():
+            if not isinstance(metric_values, dict):
+                continue
+            lines.append(f"### {metric_name.upper()}")
+            lines.append("")
+            lines.append("| key | value |")
+            lines.append("| --- | --- |")
+            for _, key, value in _flatten_metric(metric_name, metric_values):
+                lines.append(f"| {key} | {value} |")
+            lines.append("")
 
     path.write_text("\n".join(lines))
 
@@ -688,15 +715,33 @@ def _render_plot_section(plots: Mapping[str, object], base_dir: Path) -> list[st
     plot_dir_value = plots.get("plot_dir")
     plot_dir_path = Path(str(plot_dir_value)) if plot_dir_value else None
 
-    for title, key in [
+    base_entries: list[tuple[str, str]] = []
+    nested_entries: list[tuple[str, str]] = []
+
+    targets = [
         ("MPS Delta Heatmap", "mps_delta_heatmap"),
         ("TFS Correlation", "tfs_correlation_timeseries"),
-    ]:
+    ]
+
+    for title, key in targets:
         plot_path = _extract_plot_path(plots, key)
         if plot_path is None:
             continue
         rendered = _path_for_markdown(Path(plot_path), base_dir)
-        entries.append((title, rendered))
+        base_entries.append((title, rendered))
+
+    if not base_entries:
+        for name, value in plots.items():
+            if name == "plot_dir" or not isinstance(value, Mapping):
+                continue
+            for title, key in targets:
+                plot_path = _extract_plot_path(value, key)
+                if plot_path is None:
+                    continue
+                rendered = _path_for_markdown(Path(plot_path), base_dir)
+                nested_entries.append((f"{name}: {title}", rendered))
+
+    entries.extend(base_entries if base_entries else nested_entries)
 
     if not entries:
         return lines

@@ -23,7 +23,7 @@
 ## ファイルフォーマット
 - サンプルレート: 48 kHz 必須（高帯域検証のみ 96 kHz 可）。
 - ビット深度: 24-bit PCM 推奨（32f 可）。
-- チャンネル: モノラル。ステレオ録音の場合は各ch同一内容で後段指定。
+- チャンネル: ステレオ(2ch)を基本とする（モノラル入力は内部で2chへ複製される）。
 - コンテナ: WAV (PCM or IEEE float)。プレーヤーのゲイン変更を誘発するメタは避ける。
 
 ## 命名規則
@@ -52,7 +52,7 @@ pink_noise_48000_24bit_v1.wav
   "signal_type": "notched_noise",
   "sample_rate": 48000,
   "bit_depth": "24bit",
-  "channels": 1,
+  "channels": 2,
   "duration_sec": 10.0,
   "pilot_tone_freq_hz": 1000,
   "pilot_duration_ms": 100,

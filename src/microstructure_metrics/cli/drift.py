@@ -19,11 +19,14 @@ DEFAULT_BAND_WIDTH_HZ = 200.0
 DEFAULT_THRESHOLD = 0.3
 
 
-def _load_mono(path: Path) -> tuple[np.ndarray, int]:
-    data, sr = sf.read(path)
-    if data.ndim == 2:
-        data = data[:, 0]
-    return np.asarray(data, dtype=np.float64), sr
+def _load_stereo(path: Path) -> tuple[np.ndarray, int]:
+    data, sr = sf.read(path, always_2d=True)
+    arr = np.asarray(data, dtype=np.float64)
+    if arr.shape[1] == 1:
+        arr = np.stack([arr[:, 0], arr[:, 0]], axis=1)
+    elif arr.shape[1] > 2:
+        arr = arr[:, :2]
+    return arr, sr
 
 
 @click.command(name="drift")
@@ -77,8 +80,8 @@ def drift(
     """パイロットトーンからクロックドリフトを推定し警告を表示する."""
     ref_path = Path(reference)
     dut_path = Path(dut)
-    ref_data, ref_sr = _load_mono(ref_path)
-    dut_data, dut_sr = _load_mono(dut_path)
+    ref_data, ref_sr = _load_stereo(ref_path)
+    dut_data, dut_sr = _load_stereo(dut_path)
     if ref_sr != dut_sr:
         raise click.BadParameter("reference と dut のサンプルレートが一致しません。")
 

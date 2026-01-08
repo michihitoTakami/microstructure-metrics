@@ -21,7 +21,7 @@ Scope: define test signal structure, file/metadata formats, and naming rules for
 ## File format
 - Sample rate: 48 kHz required (96 kHz only when explicitly needed).
 - Bit depth: 24-bit PCM preferred; 32f allowed.
-- Channels: mono; if stereo capture, analyze channels separately.
+- Channels: stereo (2ch) by default. Mono inputs are duplicated to stereo internally.
 - Container: WAV (PCM or IEEE float). Avoid metadata that triggers gain changes.
 
 ## Naming convention
@@ -50,7 +50,7 @@ pink_noise_48000_24bit_v1.wav
   "signal_type": "notched_noise",
   "sample_rate": 48000,
   "bit_depth": "24bit",
-  "channels": 1,
+  "channels": 2,
   "duration_sec": 10.0,
   "pilot_tone_freq_hz": 1000,
   "pilot_duration_ms": 100,

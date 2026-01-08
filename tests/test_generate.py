@@ -32,7 +32,7 @@ def _pilot_rms_dbfs(
     silence_samples = int(sample_rate * silence_ms / 1000)
     start = silence_samples + int(sample_rate * margin_ms / 1000)
     end = start + max(pilot_samples - 2 * int(sample_rate * margin_ms / 1000), 1)
-    pilot_seg = data[start:end]
+    pilot_seg = np.asarray(data, dtype=np.float64)[start:end, 0]
     rms = (pilot_seg.astype("float64") ** 2).mean() ** 0.5
     rms = max(rms, 1e-12)
     return 20 * float(np.log10(rms))
@@ -45,7 +45,7 @@ def _body_segment(
     pilot_samples = int(sample_rate * pilot_ms / 1000)
     start = silence_samples + pilot_samples
     end = data.shape[0] - (silence_samples + pilot_samples)
-    return data[start:end]
+    return data[start:end, 0]
 
 
 def test_generate_thd_creates_wav_and_json(tmp_path: Path) -> None:
@@ -70,9 +70,10 @@ def test_generate_thd_creates_wav_and_json(tmp_path: Path) -> None:
     assert wav_path.exists()
     assert wav_path.with_suffix(".json").exists()
 
-    data, sample_rate = sf.read(wav_path)
+    data, sample_rate = sf.read(wav_path, always_2d=True)
     assert sample_rate == 48000
-    assert data.ndim == 1
+    assert data.ndim == 2
+    assert data.shape[1] == 2
     expected = _expected_samples(
         sample_rate=sample_rate,
         body_duration=0.5,
@@ -84,6 +85,33 @@ def test_generate_thd_creates_wav_and_json(tmp_path: Path) -> None:
         data, sample_rate=sample_rate, pilot_ms=100, silence_ms=500
     )
     assert -10.5 <= pilot_dbfs <= -8.0
+
+
+def test_generate_thd_stereo_channels(tmp_path: Path) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / "thd_stereo.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "thd",
+            "--duration",
+            "0.2",
+            "--output",
+            str(wav_path),
+            "--with-metadata",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data, sample_rate = sf.read(wav_path, always_2d=True)
+    assert sample_rate == 48_000
+    assert data.shape[1] == 2
+    assert np.allclose(data[:, 0], data[:, 1], atol=1e-12)
+
+    meta_path = wav_path.with_suffix(".json")
+    payload = meta_path.read_text()
+    assert '"channels": 2' in payload
 
 
 def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
@@ -106,7 +134,7 @@ def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert wav_path.exists()
 
-    data, sample_rate = sf.read(wav_path)
+    data, sample_rate = sf.read(wav_path, always_2d=True)
     expected = _expected_samples(
         sample_rate=sample_rate,
         body_duration=0.25,
@@ -114,7 +142,8 @@ def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
         silence_ms=500,
     )
     assert data.shape[0] == expected
-    assert data.ndim == 1
+    assert data.ndim == 2
+    assert data.shape[1] == 2
 
 
 @pytest.mark.parametrize(
@@ -172,12 +201,13 @@ def test_generate_other_signals_structure_and_pilot(tmp_path: Path, signal_type,
     result = runner.invoke(main, args)
     assert result.exit_code == 0, result.output
 
-    data, sample_rate = sf.read(wav_path)
+    data, sample_rate = sf.read(wav_path, always_2d=True)
     expected = _expected_samples(
         sample_rate=sample_rate, body_duration=0.3, pilot_ms=100, silence_ms=500
     )
     assert data.shape[0] == expected
-    assert data.ndim == 1
+    assert data.ndim == 2
+    assert data.shape[1] == 2
 
     pilot_dbfs = _pilot_rms_dbfs(
         data, sample_rate=sample_rate, pilot_ms=100, silence_ms=500
@@ -260,12 +290,12 @@ def test_pilot_frequency_and_level(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    data, sr = sf.read(wav_path)
+    data, sr = sf.read(wav_path, always_2d=True)
     silence = int(sr * 0.5)
     pilot = int(sr * 0.1)
     start = silence
     end = silence + pilot
-    pilot_seg = data[start:end]
+    pilot_seg = data[start:end, 0]
     freqs, psd = signal.welch(
         pilot_seg, sr, nperseg=min(2048, pilot_seg.shape[0]), scaling="spectrum"
     )
@@ -302,7 +332,7 @@ def test_notched_noise_has_attenuation(
         ],
     )
     assert result.exit_code == 0, result.output
-    data, sr = sf.read(wav_path)
+    data, sr = sf.read(wav_path, always_2d=True)
     body = _body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
     freqs, psd = signal.welch(body, sr, nperseg=8192, scaling="spectrum")
     center_idx = np.argmin(np.abs(freqs - 8000))
@@ -393,7 +423,7 @@ def test_pink_noise_spectral_slope(
         ],
     )
     assert result.exit_code == 0, result.output
-    data, sr = sf.read(wav_path)
+    data, sr = sf.read(wav_path, always_2d=True)
     body = _body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
     freqs, psd = signal.welch(body, sr, nperseg=8192, scaling="spectrum")
     mask = (freqs >= 200) & (freqs <= 10000)
@@ -424,7 +454,7 @@ def test_modulated_has_am_depth(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    data, sr = sf.read(wav_path)
+    data, sr = sf.read(wav_path, always_2d=True)
     body = _body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
     analytic = signal.hilbert(body)
     env = np.abs(analytic)
@@ -455,7 +485,7 @@ def test_tfs_tones_peak_frequencies(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    data, sr = sf.read(wav_path)
+    data, sr = sf.read(wav_path, always_2d=True)
     body = _body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
     freqs = np.fft.rfftfreq(body.size, 1 / sr)
     spectrum = np.abs(np.fft.rfft(body))

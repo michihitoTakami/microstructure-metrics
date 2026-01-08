@@ -4,9 +4,22 @@ import json
 from pathlib import Path
 
 import click
+import numpy as np
 import soundfile as sf
 
 from microstructure_metrics.alignment import align_audio_pair
+
+
+def _as_stereo(data: np.ndarray) -> np.ndarray:
+    """Normalize input audio to 2ch (samples, 2)."""
+    arr = np.asarray(data, dtype=np.float64)
+    if arr.ndim == 1:
+        return np.stack([arr, arr], axis=1)
+    if arr.shape[1] == 1:
+        return np.stack([arr[:, 0], arr[:, 0]], axis=1)
+    if arr.shape[1] > 2:
+        return arr[:, :2]
+    return arr
 
 
 @click.command(name="align")
@@ -94,12 +107,13 @@ def align(
     ref_path = Path(reference)
     dut_path = Path(dut)
 
-    ref_data, ref_sr = sf.read(ref_path)
-    dut_data, dut_sr = sf.read(dut_path)
-    if ref_data.ndim != 1 or dut_data.ndim != 1:
-        raise click.ClickException("mono WAV のみ対応しています。")
+    ref_data, ref_sr = sf.read(ref_path, always_2d=True)
+    dut_data, dut_sr = sf.read(dut_path, always_2d=True)
     if ref_sr != dut_sr:
         raise click.ClickException(f"サンプルレート不一致: ref={ref_sr}, dut={dut_sr}")
+
+    ref_data = _as_stereo(ref_data)
+    dut_data = _as_stereo(dut_data)
 
     result = align_audio_pair(
         reference=ref_data,
@@ -139,6 +153,9 @@ def align(
         "end_sample": result.end_sample,
         "confidence": result.confidence,
         "sample_rate": ref_sr,
+        "channels": int(result.aligned_ref.shape[1])
+        if result.aligned_ref.ndim == 2
+        else 1,
         "pilot_freq": pilot_freq,
         "threshold": threshold,
         "band_width_hz": band_width_hz,

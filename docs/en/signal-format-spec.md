@@ -28,7 +28,7 @@ Notes:
 ## File format
 - Sample rate: 48 kHz required; 96 kHz optional (use only when explicitly needed).
 - Bit depth: 24-bit PCM preferred; 32-bit float allowed.
-- Channels: mono. If stereo capture is needed, evaluate each channel independently with identical content.
+- Channels: stereo (2ch) by default. Mono inputs are duplicated to stereo internally.
 - Container: WAV (PCM or IEEE float). Avoid metadata that triggers DAW gain changes.
 
 ### Rationale (key parameters)
@@ -76,7 +76,7 @@ pink_noise_48000_24bit_v1.wav
   "signal_type": "notched_noise",
   "sample_rate": 48000,
   "bit_depth": "24bit",
-  "channels": 1,
+  "channels": 2,
   "duration_sec": 10.0,
   "pilot_tone_freq_hz": 1000,
   "pilot_duration_ms": 100,

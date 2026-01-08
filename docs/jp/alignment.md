@@ -28,7 +28,7 @@ uv run microstructure-metrics align ref.wav dut.wav \
 - `--no-refine-delay`: サブサンプル補間を無効化。
 
 前提:
-- mono WAV、同一サンプルレート（測定信号は 48 kHz を想定）。
+- 2ch WAV を想定（モノラル入力も内部で2chへ複製）。同一サンプルレート（測定信号は 48 kHz を想定）。
 
 ## Python API
 

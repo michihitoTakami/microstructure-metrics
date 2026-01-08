@@ -10,7 +10,7 @@ This guide is for end users who measure and compare DAC/AMP devices using the CL
 
 ## Prerequisites
 - Python 3.13+, [uv](https://github.com/astral-sh/uv)
-- WAV I/O: mono, 48 kHz / 24-bit (32f allowed). Keep lead/tail silence; do not trim.
+- WAV I/O: stereo (2ch), 48 kHz / 24-bit (32f allowed). Mono inputs are duplicated to stereo internally. Keep lead/tail silence; do not trim.
 
 ## Install
 ```bash

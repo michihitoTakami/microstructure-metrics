@@ -70,10 +70,19 @@ def estimate_clock_drift(
     peak_threshold: float = DEFAULT_THRESHOLD,
 ) -> DriftEstimate:
     """パイロット位置の差分からクロックドリフトを推定する."""
-    ref = np.asarray(reference, dtype=np.float64).flatten()
-    dut_sig = np.asarray(dut, dtype=np.float64).flatten()
+    ref_arr = np.asarray(reference, dtype=np.float64)
+    dut_arr = np.asarray(dut, dtype=np.float64)
+
+    # Stereo/multi-channel: estimate drift on the shared mid (mean across channels).
+    if ref_arr.ndim == 2:
+        ref_arr = np.mean(ref_arr, axis=1)
+    if dut_arr.ndim == 2:
+        dut_arr = np.mean(dut_arr, axis=1)
+
+    ref = ref_arr.flatten()
+    dut_sig = dut_arr.flatten()
     if ref.ndim != 1 or dut_sig.ndim != 1:
-        raise ValueError("reference/dut は1次元モノラル波形を期待します。")
+        raise ValueError("reference/dut は1chまたは2ch(s, ch)の波形を期待します。")
     if sample_rate <= 0:
         raise ValueError("sample_rate は正の整数で指定してください。")
 

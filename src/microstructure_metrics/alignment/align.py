@@ -32,6 +32,8 @@ def extract_test_segment(
     """Cut out the test body between the two detected pilot tones."""
     if margin_ms < 0:
         raise ValueError("margin_ms must be non-negative.")
+    if audio.ndim not in {1, 2}:
+        raise ValueError("audio must be 1-D or 2-D.")
     margin_samples = int(sample_rate * margin_ms / 1000)
     start = pilot_result.first_end + margin_samples
     end = pilot_result.second_start - margin_samples
@@ -48,11 +50,14 @@ def align_signals(
     *,
     delay_samples: float,
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """Shift DUT by the estimated delay and trim to the common length."""
+    """Shift DUT by the estimated delay and trim to the common length.
+
+    1D/2D (samples, channels) に対応し、0軸方向にシフトを適用する。
+    """
     ref = np.asarray(reference, dtype=np.float64)
     du = np.asarray(dut, dtype=np.float64)
-    if ref.ndim != 1 or du.ndim != 1:
-        raise ValueError("reference/dut must be 1-D signals.")
+    if ref.ndim not in {1, 2} or du.ndim != ref.ndim:
+        raise ValueError("reference/dut must be 1-D or 2-D signals with same rank.")
 
     shift = int(np.round(delay_samples))
     if shift > 0:
@@ -91,9 +96,19 @@ def align_audio_pair(
     """End-to-end alignment: detect pilots, cut body, estimate delay, and align."""
     ref_signal = np.asarray(reference, dtype=np.float64)
     dut_signal = np.asarray(dut, dtype=np.float64)
+    if ref_signal.ndim not in {1, 2} or dut_signal.ndim != ref_signal.ndim:
+        raise ValueError("reference/dut must be 1-D or 2-D signals.")
+
+    def _alignment_view(signal: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        if signal.ndim == 1:
+            return signal
+        return np.asarray(np.mean(signal, axis=1), dtype=np.float64)
+
+    ref_view = _alignment_view(ref_signal)
+    dut_view = _alignment_view(dut_signal)
 
     ref_pilot = detect_pilot_tones(
-        ref_signal,
+        ref_view,
         sample_rate=sample_rate,
         pilot_freq=pilot_freq,
         threshold=threshold,
@@ -102,7 +117,7 @@ def align_audio_pair(
         pilot_duration_ms=pilot_duration_ms,
     )
     dut_pilot = detect_pilot_tones(
-        dut_signal,
+        dut_view,
         sample_rate=sample_rate,
         pilot_freq=pilot_freq,
         threshold=threshold,
@@ -111,6 +126,12 @@ def align_audio_pair(
         pilot_duration_ms=pilot_duration_ms,
     )
 
+    ref_segment_view = extract_test_segment(
+        ref_view, ref_pilot, sample_rate=sample_rate, margin_ms=margin_ms
+    )
+    dut_segment_view = extract_test_segment(
+        dut_view, dut_pilot, sample_rate=sample_rate, margin_ms=margin_ms
+    )
     ref_segment = extract_test_segment(
         ref_signal, ref_pilot, sample_rate=sample_rate, margin_ms=margin_ms
     )
@@ -121,8 +142,8 @@ def align_audio_pair(
     pilot_offset = dut_pilot.first_start - ref_pilot.first_start
 
     residual_delay = estimate_delay(
-        reference=ref_segment,
-        dut=dut_segment,
+        reference=ref_segment_view,
+        dut=dut_segment_view,
         sample_rate=sample_rate,
         max_lag_ms=max_lag_ms,
         refine=refine_delay,
