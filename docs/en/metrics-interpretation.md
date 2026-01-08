@@ -36,6 +36,20 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Input requirements: impulse/edge stimulus (single Dirac or steep step per `signal-specifications.md`). Not meaningful on stationary noise or sinusoids.
 - Robustness: uses smoothed envelope/energy to tolerate phase jitter and noise; if no events are detected, values fall back to 0.
 
+### Low-Frequency Complex Reconstruction (LFCR)
+- What: bass waveform fidelity via phase-conditioned cycle shapes, harmonic phase coherence, and envelope stability in low bands.
+- Keys: `cycle_shape_corr_mean` / `cycle_shape_corr_p05` (→1 good), `harmonic_phase_coherence` (→1 good), `envelope_diff_outlier_rate` (→0 good), `bands_hz`, and per-band `band_metrics.*`.
+- Defaults: bands 20–80 Hz / 80–200 Hz, Butterworth order 4 (zero-phase), 128 cycle samples, envelope threshold -50 dBFS, harmonic search 30–180 Hz up to 5th order; all recorded in the report.
+- Heuristic: values drop when low-tap interpolation or phase-warped bass breaks waveform shape or harmonic alignment; outlier rate >0.1 indicates local envelope glitches.
+- Input: complex bass / kick+bass composites or low-frequency multitone with intentional phase/PM/FM variation.
+
+### Low-Frequency Complex Reconstruction (LFCR)
+- What: bass waveform fidelity via phase-conditioned cycle shapes + harmonic phase coherence + envelope stability in low bands.
+- Keys: `cycle_shape_corr_mean`/`cycle_shape_corr_p05` (→1 good), `harmonic_phase_coherence` (→1 good), `envelope_diff_outlier_rate` (→0 good), `bands_hz`, and per-band `band_metrics.*`.
+- Defaults: bands 20–80 Hz / 80–200 Hz, Butterworth order 4 (zero-phase), 128 cycle samples, envelope threshold -50 dBFS, harmonic search 30–180 Hz up to 5th order; all recorded in the report.
+- Heuristic: values drop when low-tap interpolation or phase-warped bass breaks waveform shape or harmonic alignment; outlier rate >0.1 indicates local envelope glitches.
+- Input: complex bass / kick+bass composites or low-frequency multitone with intentional phase/PM/FM variation.
+
 ## Reading examples
 - “MPS corr 0.75, TFS corr 0.8”: both texture and high-band phase are degraded—could be heavy feedback or bandwidth limits.
 - “THD/SINAD good but MPS/TFS degraded”: steady-state is fine but microstructure is harmed; re-check filters/gain structure.

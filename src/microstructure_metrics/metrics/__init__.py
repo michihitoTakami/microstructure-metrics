@@ -1,5 +1,10 @@
 """Metric implementations."""
 
+from microstructure_metrics.metrics.bass import (
+    BassBandMetrics,
+    BassResult,
+    calculate_low_freq_complex_reconstruction,
+)
 from microstructure_metrics.metrics.binaural import (
     BinauralBandStats,
     BinauralResult,
@@ -36,6 +41,9 @@ __all__ = [
     "BinauralBandStats",
     "BinauralResult",
     "calculate_binaural_cue_preservation",
+    "BassBandMetrics",
+    "BassResult",
+    "calculate_low_freq_complex_reconstruction",
     "TFSComponents",
     "TFSCorrelationResult",
     "extract_tfs",

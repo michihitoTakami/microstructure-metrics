@@ -40,6 +40,13 @@
 - 入力条件: 単一インパルスや急峻ステップなどエッジを含む刺激（`signal-specifications.md`参照）。定常ノイズやサイン波では意味を持たない。
 - ノイズ/位相ばらつき耐性: 包絡エネルギーを平滑してから特徴抽出。イベント数が0の場合は指標は0となる。
 
+### Low-Frequency Complex Reconstruction (LFCR)
+- 内容: 低域の位相条件付き1周期形状、倍音位相整合、包絡安定度でベース波形の再現度を見る。
+- 主指標: `cycle_shape_corr_mean` / `cycle_shape_corr_p05`（1に近いほど良）、`harmonic_phase_coherence`（1に近いほど良）、`envelope_diff_outlier_rate`（0に近いほど良）、`bands_hz` と帯域別 `band_metrics.*`。
+- デフォルト: 20–80 Hz / 80–200 Hz、Butterworth 4次（ゼロ位相）、位相整合波形128点、包絡閾値 -50 dBFS、基本周波数探索 30–180 Hz、5次倍音まで。パラメータはレポートに記録。
+- ヒューリスティクス: タップ不足や位相ワープで波形/倍音整合が崩れると値が低下。`envelope_diff_outlier_rate` > 0.1 なら局所的な包絡崩れを疑う。
+- 入力: 複雑ベース / キック+ベース合成 / 低域マルチトーン（位相・PM・FMを意図的に乱すもの）。
+
 ### Binaural Cue Preservation (BCP)
 - 内容: 帯域×時間で ITD/ILD/IACC を推定し、参照との差分を分位点で集約。像の揺れ・広がりを捉える。
 - 主指標: `median_abs_delta_itd_ms`, `p95_abs_delta_itd_ms`, `itd_outlier_rate`(>|0.2|ms率)、`median_abs_delta_ild_db`, `p95_abs_delta_ild_db`, `iacc_p05`, `delta_iacc_median`。
