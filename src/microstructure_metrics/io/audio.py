@@ -18,7 +18,7 @@ from microstructure_metrics.io.validation import (
     validate_audio_pair,
 )
 
-ChannelsMode = Literal["stereo", "mid", "side"]
+ChannelsMode = Literal["stereo", "mid", "side", "ch0", "ch1"]
 
 
 def load_audio_pair(
@@ -127,35 +127,43 @@ def _select_channels(
 ) -> tuple[np.ndarray, str | None]:
     """Channel selection/downmix strategy.
 
-    後方互換は捨て、I/Oは常に2chへ正規化する。
+    I/Oは常に2chへ正規化する。
     - mono入力: stereoとして複製
     - 2ch以上: 先頭2chのみ使用
+    - ch0/ch1: 指定chを選択し2chへ複製
     """
     arr = np.asarray(data, dtype=np.float64)
-    warning: str | None = None
+    notes: list[str] = []
     if arr.ndim == 1:
         arr2 = np.stack([arr, arr], axis=1)
-        warning = "mono input; duplicated to stereo"
+        notes.append("mono input; duplicated to stereo")
     else:
         if arr.shape[1] == 1:
             arr2 = np.stack([arr[:, 0], arr[:, 0]], axis=1)
-            warning = "single-channel input; duplicated to stereo"
+            notes.append("single-channel input; duplicated to stereo")
         else:
             if arr.shape[1] > 2:
-                warning = "multi-channel input; using first 2 channels"
+                notes.append("multi-channel input; using first 2 channels")
             arr2 = arr[:, :2]
 
     if channels == "stereo":
-        return arr2.astype(np.float64), warning
-    if channels == "mid":
+        result = arr2
+    elif channels in {"ch0", "ch1"}:
+        index = 0 if channels == "ch0" else 1
+        selected = arr2[:, index]
+        result = np.stack([selected, selected], axis=1)
+        notes.append(f"selected channel {index}")
+    elif channels == "mid":
         mid = 0.5 * (arr2[:, 0] + arr2[:, 1])
-        stereo_mid = np.stack([mid, mid], axis=1)
-        return stereo_mid.astype(np.float64), warning
-    if channels == "side":
+        result = np.stack([mid, mid], axis=1)
+    elif channels == "side":
         side = 0.5 * (arr2[:, 0] - arr2[:, 1])
-        stereo_side = np.stack([side, -side], axis=1)
-        return stereo_side.astype(np.float64), warning
-    raise ValueError(f"Unsupported channels mode: {channels}")
+        result = np.stack([side, -side], axis=1)
+    else:
+        raise ValueError(f"Unsupported channels mode: {channels}")
+
+    warning = "; ".join(notes) if notes else None
+    return result.astype(np.float64), warning
 
 
 def _compute_metadata(

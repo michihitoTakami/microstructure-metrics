@@ -169,6 +169,32 @@ def test_channels_option_stereo_mid_side(tmp_path: Path) -> None:
     assert np.allclose(ref_side[:, 1], -expected_side, atol=1e-12)
 
 
+def test_channels_option_ch0_ch1(tmp_path: Path) -> None:
+    sr = 48_000
+    duration = 0.08
+    left = _sine(duration, sr, amplitude=0.3)
+    right = np.full_like(left, 0.1)
+    stereo = np.stack([left, right], axis=1)
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, stereo, sr, subtype="PCM_24")
+    sf.write(dut_path, stereo, sr, subtype="PCM_24")
+
+    ref_ch0, _, validation0 = load_audio_pair(
+        ref_path, dut_path, channels="ch0", remove_dc=False
+    )
+    assert np.allclose(ref_ch0[:, 0], left, atol=1e-12)
+    assert np.allclose(ref_ch0[:, 1], left, atol=1e-12)
+    assert any("selected channel 0" in w for w in validation0.warnings)
+
+    ref_ch1, _, validation1 = load_audio_pair(
+        ref_path, dut_path, channels="ch1", remove_dc=False
+    )
+    assert np.allclose(ref_ch1[:, 0], right, atol=1e-12)
+    assert np.allclose(ref_ch1[:, 1], right, atol=1e-12)
+    assert any("selected channel 1" in w for w in validation1.warnings)
+
+
 def test_normalize_peak_and_rms(tmp_path: Path) -> None:
     sr = 48_000
     dur = 0.1

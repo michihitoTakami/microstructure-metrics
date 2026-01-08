@@ -64,7 +64,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
 ```
 - 主なオプション:
   - 入力処理: `--allow-resample` `--target-sample-rate` `--channels`
-    - `--channels`: `stereo|mid|side` を選択。I/Oは常に2chへ正規化され、mid/sideは2chへ写像して解析する。
+    - `--channels`: `stereo|mid|side|ch0|ch1` を選択。I/Oは常に2chへ正規化され、mid/sideは2chへ写像、ch0/ch1は指定chを複製して解析する。
   - アライメント: `--align/--no-align` `--pilot-freq` `--pilot-threshold`
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
@@ -72,6 +72,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
   - 可視化: `--plot` (MPS差分ヒートマップ / TFS相関時系列を保存), `--plot-dir` (プロット出力先ディレクトリ)
   - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
+  - Binaural出力項目: `median_abs_delta_itd_ms` / `p95_abs_delta_itd_ms` / `itd_outlier_rate` / `median_abs_delta_ild_db` / `p95_abs_delta_ild_db` / `iacc_p05` など
 - 例: JSON と Markdown を保存
 ```
 uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
