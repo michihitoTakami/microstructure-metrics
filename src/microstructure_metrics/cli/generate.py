@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal
 
 import click
 import numpy as np
@@ -256,17 +255,6 @@ def _parse_float_list(text: str) -> list[float]:
     default=False,
     help="メタデータJSONも出力する",
 )
-@click.option(
-    "--channels",
-    type=click.Choice(["ch0", "ch1", "stereo", "mid", "side"]),
-    default=None,
-    show_default=False,
-    help=(
-        "出力チャンネルモード（指定時は2ch出力）。"
-        "stereo: L=R=signal, ch0/ch1: 片chのみsignal, mid: stereo同等, "
-        "side: L=signal,R=-signal（side=(L-R)/2=signal）"
-    ),
-)
 def generate(
     signal_type: str,
     sample_rate: int,
@@ -302,7 +290,6 @@ def generate(
     click_band_limit_hz: float,
     output: str | None,
     with_metadata: bool,
-    channels: Literal["ch0", "ch1", "stereo", "mid", "side"] | None,
 ) -> None:
     """テスト信号を生成してWAV/JSONを書き出す."""
     common = CommonSignalConfig(
@@ -355,20 +342,10 @@ def generate(
 
     def _write_one(*, result: SignalBuildResult, wav_path: Path) -> None:
         wav_path.parent.mkdir(parents=True, exist_ok=True)
-        data = result.data
+        # Backward-compat is intentionally dropped: always output stereo WAV.
+        data = np.stack([result.data, result.data], axis=1)
         metadata = dict(result.metadata)
-        if channels is None:
-            metadata["channels"] = 1
-        else:
-            if channels in {"stereo", "mid"}:
-                data = np.stack([data, data], axis=1)
-            elif channels == "ch0":
-                data = np.stack([data, np.zeros_like(data)], axis=1)
-            elif channels == "ch1":
-                data = np.stack([np.zeros_like(data), data], axis=1)
-            else:  # side
-                data = np.stack([data, -data], axis=1)
-            metadata["channels"] = 2
+        metadata["channels"] = 2
         sf.write(
             wav_path,
             data,

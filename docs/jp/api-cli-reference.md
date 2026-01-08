@@ -3,7 +3,7 @@
 本書は CLI サブコマンドの主要オプションと典型的な使い方をまとめる。詳細は `uv run microstructure-metrics <cmd> --help` を参照。
 
 ## 前提
-- WAV はモノラル推奨・48 kHz / 24-bit（または 32f）。参照(ref)とDUTのサンプルレートを揃える。
+- WAV はステレオ(2ch)推奨・48 kHz / 24-bit（または 32f）。参照(ref)とDUTのサンプルレートを揃える。
 - パイロット入りテスト信号の仕様は `docs/signal-specifications.md` を参照。
 
 ## generate — テスト信号生成
@@ -15,7 +15,7 @@ uv run microstructure-metrics generate <signal_type> [options]
   - `--sample-rate,-sr` (int, default 48000)
   - `--bit-depth,-bd` ("24bit" or "32f")
   - `--duration,-d` (sec, default 10.0) テスト本体長
-  - `--channels` ("ch0|ch1|stereo|mid|side"): 指定時はステレオ出力（mono生成信号を2chへ配置/複製）
+  - 出力チャンネル: **常にステレオ(2ch)**（生成信号をL/Rに複製）
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
@@ -63,9 +63,8 @@ uv run microstructure-metrics drift ref.wav dut.wav [options]
 uv run microstructure-metrics report ref.wav dut.wav [options]
 ```
 - 主なオプション:
-  - 入力処理: `--allow-resample` `--target-sample-rate` `--channel` / `--channels`
-    - `--channel`: 従来の単一ch指定（整数インデックス）。後方互換のため残置。
-    - `--channels`: `ch0|ch1|stereo|mid|side` を選択。`stereo`はL/Rを保持、`mid/side`は M=(L+R)/2, S=(L-R)/2 でモノラル化。`--channel` と同時指定不可。
+  - 入力処理: `--allow-resample` `--target-sample-rate` `--channels`
+    - `--channels`: `stereo|mid|side` を選択。I/Oは常に2chへ正規化され、mid/sideは2chへ写像して解析する。
   - アライメント: `--align/--no-align` `--pilot-freq` `--pilot-threshold`
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`

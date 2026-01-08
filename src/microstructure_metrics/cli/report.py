@@ -92,14 +92,11 @@ MultiChannelMetricsPayload = dict[str, MetricsPayload]
     help="リサンプル先サンプルレート（未指定なら reference の SR を優先）",
 )
 @click.option(
-    "--channel",
-    type=click.IntRange(min=0),
-    help="ステレオ入力時に使用するチャンネル（未指定ならch0）",
-)
-@click.option(
     "--channels",
-    type=click.Choice(["ch0", "ch1", "stereo", "mid", "side"]),
-    help="ステレオ入力処理モード（--channel との同時指定不可）",
+    type=click.Choice(["stereo", "mid", "side"]),
+    default="stereo",
+    show_default=True,
+    help="入力処理モード（I/Oは常に2ch。mid/sideは2chへ写像して解析）",
 )
 @click.option(
     "--align/--no-align",
@@ -270,8 +267,7 @@ def report(
     plot_dir: str | None,
     allow_resample: bool,
     target_sample_rate: int | None,
-    channel: int | None,
-    channels: Literal["ch0", "ch1", "stereo", "mid", "side"] | None,
+    channels: Literal["stereo", "mid", "side"],
     align: bool,
     pilot_freq: float,
     pilot_threshold: float,
@@ -298,16 +294,12 @@ def report(
     mps_mod_weighting: str,
 ) -> None:
     """リファレンス/DUT WAVを整列し、全指標を計算してレポートする。"""
-    if channel is not None and channels is not None:
-        raise click.ClickException("--channel と --channels は同時に指定できません。")
-
     try:
         ref_data, dut_data, validation = load_audio_pair(
             reference_path=reference,
             dut_path=dut,
             allow_resample=allow_resample,
             target_sample_rate=target_sample_rate,
-            channel=channel,
             channels=channels,
         )
     except ValueError as exc:
@@ -352,12 +344,13 @@ def report(
         )
         alignment = None
 
+    # Backward-compat is intentionally dropped: aligned_ref/dut are always 2ch.
     metrics_by_channel: dict[str, CalculatedMetrics] = {}
-    metrics_payload: MetricsPayload | MultiChannelMetricsPayload
-    if aligned_ref.ndim == 1:
-        metrics_single = _calculate_metrics(
-            aligned_ref=aligned_ref,
-            aligned_dut=aligned_dut,
+    for idx in range(aligned_ref.shape[1]):
+        key = f"ch{idx}"
+        metrics_by_channel[key] = _calculate_metrics(
+            aligned_ref=aligned_ref[:, idx],
+            aligned_dut=aligned_dut[:, idx],
             sample_rate=sample_rate,
             fundamental_freq=fundamental_freq,
             expected_level_dbfs=expected_level_dbfs,
@@ -369,9 +362,9 @@ def report(
                 "bandwidth_scale": mps_filterbank_bandwidth_scale,
             },
             mps_envelope_method=mps_envelope_method,
-            mps_envelope_lpf_hz=(
-                mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None
-            ),
+            mps_envelope_lpf_hz=mps_envelope_lpf_hz
+            if mps_envelope_lpf_hz > 0
+            else None,
             mps_envelope_lpf_order=mps_envelope_lpf_order,
             mps_mod_scale=mps_mod_scale,
             mps_num_mod_bins=mps_num_mod_bins,
@@ -380,40 +373,9 @@ def report(
             mps_band_weighting=mps_band_weighting,
             mps_mod_weighting=mps_mod_weighting,
         )
-        metrics_by_channel["mono"] = metrics_single
-        metrics_payload = _metrics_to_payload(metrics_single)
-    else:
-        for idx in range(aligned_ref.shape[1]):
-            key = f"ch{idx}"
-            metrics_by_channel[key] = _calculate_metrics(
-                aligned_ref=aligned_ref[:, idx],
-                aligned_dut=aligned_dut[:, idx],
-                sample_rate=sample_rate,
-                fundamental_freq=fundamental_freq,
-                expected_level_dbfs=expected_level_dbfs,
-                transient_smoothing_ms=transient_smoothing_ms,
-                transient_asymmetry_window_ms=transient_asymmetry_window_ms,
-                mps_filterbank=mps_filterbank,
-                mps_filterbank_kwargs={
-                    "order": mps_filterbank_order,
-                    "bandwidth_scale": mps_filterbank_bandwidth_scale,
-                },
-                mps_envelope_method=mps_envelope_method,
-                mps_envelope_lpf_hz=(
-                    mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None
-                ),
-                mps_envelope_lpf_order=mps_envelope_lpf_order,
-                mps_mod_scale=mps_mod_scale,
-                mps_num_mod_bins=mps_num_mod_bins,
-                mps_scale=mps_scale,
-                mps_norm=mps_norm,
-                mps_band_weighting=mps_band_weighting,
-                mps_mod_weighting=mps_mod_weighting,
-            )
-        metrics_payload = {
-            name: _metrics_to_payload(metric)
-            for name, metric in metrics_by_channel.items()
-        }
+    metrics_payload: MultiChannelMetricsPayload = {
+        name: _metrics_to_payload(metric) for name, metric in metrics_by_channel.items()
+    }
 
     json_path = Path(output_json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -426,21 +388,12 @@ def report(
             if plot_dir is not None
             else json_path.parent / f"{json_path.stem}_plots"
         )
-        if aligned_ref.ndim == 1:
-            plot_payload = cast(
-                dict[str, object],
-                _generate_plots(
-                    metrics=metrics_by_channel["mono"],
-                    plot_dir=resolved_plot_dir,
-                ),
+        plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
+        for name, metric in metrics_by_channel.items():
+            plot_payload[name] = _generate_plots(
+                metrics=metric,
+                plot_dir=resolved_plot_dir / name,
             )
-        else:
-            plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
-            for name, metric in metrics_by_channel.items():
-                plot_payload[name] = _generate_plots(
-                    metrics=metric,
-                    plot_dir=resolved_plot_dir / name,
-                )
         click.echo(f"プロットを書き出しました: {resolved_plot_dir}")
 
     report_payload: dict[str, object] = {
@@ -450,7 +403,11 @@ def report(
             "warnings": validation.warnings,
             "errors": validation.errors,
         },
-        "alignment": _alignment_summary(alignment, aligned_ref.shape[0]),
+        "alignment": {
+            **_alignment_summary(alignment, aligned_ref.shape[0]),
+            "shared_across_channels": True,
+            "channels_mode": channels,
+        },
         "drift": drift_payload,
         "metrics": metrics_payload,
     }
@@ -695,10 +652,11 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
     }
 
 
-def _write_csv(path: Path, metrics: Mapping[str, Mapping[str, object]]) -> None:
+def _write_csv(path: Path, metrics: MultiChannelMetricsPayload) -> None:
     rows: list[tuple[str, str, object]] = []
-    for metric_name, metric_values in metrics.items():
-        rows.extend(_flatten_metric(metric_name, metric_values))
+    for channel_name, channel_metrics in metrics.items():
+        for metric_name, metric_values in channel_metrics.items():
+            rows.extend(_flatten_metric(f"{channel_name}.{metric_name}", metric_values))
 
     with path.open("w", newline="") as fp:
         writer = csv.writer(fp)
@@ -730,16 +688,23 @@ def _write_markdown(path: Path, *, report_payload: dict[str, object]) -> None:
     metrics_obj = report_payload.get("metrics", {})
     if not isinstance(metrics_obj, dict):
         metrics_obj = {}
-    for metric_name, metric_values in metrics_obj.items():
-        if not isinstance(metric_values, dict):
+
+    # Always multi-channel: metrics[channel][metric] = values
+    for channel_name, channel_metrics in metrics_obj.items():
+        if not isinstance(channel_metrics, dict):
             continue
-        lines.append(f"## {metric_name.upper()}")
+        lines.append(f"## {channel_name}")
         lines.append("")
-        lines.append("| key | value |")
-        lines.append("| --- | --- |")
-        for _, key, value in _flatten_metric(metric_name, metric_values):
-            lines.append(f"| {key} | {value} |")
-        lines.append("")
+        for metric_name, metric_values in channel_metrics.items():
+            if not isinstance(metric_values, dict):
+                continue
+            lines.append(f"### {metric_name.upper()}")
+            lines.append("")
+            lines.append("| key | value |")
+            lines.append("| --- | --- |")
+            for _, key, value in _flatten_metric(metric_name, metric_values):
+                lines.append(f"| {key} | {value} |")
+            lines.append("")
 
     path.write_text("\n".join(lines))
 

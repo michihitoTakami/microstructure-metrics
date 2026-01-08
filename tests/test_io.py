@@ -26,14 +26,16 @@ def test_load_audio_pair_returns_validation_and_metadata(tmp_path: Path) -> None
     ref_out, dut_out, validation = load_audio_pair(ref_path, dut_path)
 
     assert ref_out.shape == dut_out.shape
+    assert ref_out.ndim == 2
+    assert ref_out.shape[1] == 2
     assert validation.is_valid
     assert validation.errors == []
     assert validation.metadata_ref.sample_rate == sr
     assert validation.metadata_ref.bit_depth == 24
-    assert validation.metadata_ref.channels == 1
+    assert validation.metadata_ref.channels == 2
     assert np.isclose(validation.metadata_ref.peak_amplitude, 0.5, atol=1e-3)
     assert np.isclose(validation.metadata_dut.peak_amplitude, 0.4, atol=1e-3)
-    assert not validation.warnings
+    assert any("duplicated to stereo" in w for w in validation.warnings)
 
 
 def test_sample_rate_mismatch_requires_resample_option(tmp_path: Path) -> None:
@@ -96,45 +98,42 @@ def test_quality_checks_detect_clipping_dc_and_silence(tmp_path: Path) -> None:
     assert "very low level" in warnings  # dut is mostly silent
 
 
-def test_channel_selection_defaults_to_left_with_warning(tmp_path: Path) -> None:
+def test_stereo_input_keeps_two_channels_without_warning(tmp_path: Path) -> None:
     sr = 48_000
     duration = 0.1
     left = _sine(duration, sr, amplitude=0.3)
     right = np.full_like(left, 0.1)
     stereo = np.stack([left, right], axis=1)
-    dut = _sine(duration, sr, amplitude=0.25)
     ref_path = tmp_path / "ref.wav"
     dut_path = tmp_path / "dut.wav"
     sf.write(ref_path, stereo, sr, subtype="PCM_24")
-    sf.write(dut_path, dut, sr, subtype="PCM_24")
+    sf.write(dut_path, stereo, sr, subtype="PCM_24")
 
-    ref_out, _, validation = load_audio_pair(ref_path, dut_path)
+    ref_out, _, validation = load_audio_pair(ref_path, dut_path, remove_dc=False)
+    assert ref_out.ndim == 2
+    assert ref_out.shape[1] == 2
+    assert np.allclose(ref_out[:, 0], left, atol=1e-9)
+    assert np.allclose(ref_out[:, 1], right, atol=1e-9)
+    assert not any("duplicated to stereo" in w for w in validation.warnings)
 
-    assert np.allclose(ref_out, left, atol=1e-9)
-    assert any("stereo input" in w for w in validation.warnings)
 
-
-def test_channel_selection_with_index_and_bounds(tmp_path: Path) -> None:
+def test_multi_channel_input_is_truncated_to_two_channels(tmp_path: Path) -> None:
     sr = 48_000
     duration = 0.05
     ch0 = _sine(duration, sr, amplitude=0.1)
     ch1 = np.full_like(ch0, 0.2)
     ch2 = np.full_like(ch0, -0.05)
     multi = np.stack([ch0, ch1, ch2], axis=1)
-    dut = _sine(duration, sr, amplitude=0.25)
     ref_path = tmp_path / "ref.wav"
     dut_path = tmp_path / "dut.wav"
     sf.write(ref_path, multi, sr, subtype="PCM_24")
-    sf.write(dut_path, dut, sr, subtype="PCM_24")
+    sf.write(dut_path, multi, sr, subtype="PCM_24")
 
-    ref_out, _, validation = load_audio_pair(
-        ref_path, dut_path, channel=1, remove_dc=False
-    )
-    assert np.allclose(ref_out, ch1, atol=1e-9)
-    assert not any("stereo input" in w for w in validation.warnings)
-
-    with pytest.raises(ValueError):
-        load_audio_pair(ref_path, dut_path, channel=5)
+    ref_out, _, validation = load_audio_pair(ref_path, dut_path, remove_dc=False)
+    assert ref_out.shape[1] == 2
+    assert np.allclose(ref_out[:, 0], ch0, atol=1e-9)
+    assert np.allclose(ref_out[:, 1], ch1, atol=1e-9)
+    assert any("using first 2 channels" in w for w in validation.warnings)
 
 
 def test_channels_option_stereo_mid_side(tmp_path: Path) -> None:
@@ -158,42 +157,16 @@ def test_channels_option_stereo_mid_side(tmp_path: Path) -> None:
 
     ref_mid, _, validation_mid = load_audio_pair(ref_path, dut_path, channels="mid")
     expected_mid = 0.5 * (left + right)
-    assert ref_mid.ndim == 1
-    assert np.allclose(ref_mid, expected_mid, atol=1e-12)
-    assert validation_mid.metadata_ref.channels == 1
+    assert ref_mid.ndim == 2
+    assert np.allclose(ref_mid[:, 0], expected_mid, atol=1e-12)
+    assert np.allclose(ref_mid[:, 1], expected_mid, atol=1e-12)
+    assert validation_mid.metadata_ref.channels == 2
 
     ref_side, _, _ = load_audio_pair(ref_path, dut_path, channels="side")
     expected_side = 0.5 * (left - right)
-    assert np.allclose(ref_side, expected_side, atol=1e-12)
-
-
-def test_channels_option_conflict_with_channel(tmp_path: Path) -> None:
-    sr = 48_000
-    data = _sine(0.05, sr, amplitude=0.2)
-    ref_path = tmp_path / "ref.wav"
-    dut_path = tmp_path / "dut.wav"
-    sf.write(ref_path, data, sr, subtype="PCM_24")
-    sf.write(dut_path, data, sr, subtype="PCM_24")
-
-    with pytest.raises(ValueError):
-        load_audio_pair(ref_path, dut_path, channel=0, channels="stereo")
-
-
-def test_channels_option_ch0_on_mono_input_is_noop(tmp_path: Path) -> None:
-    sr = 48_000
-    data = _sine(0.05, sr, amplitude=0.2)
-    ref_path = tmp_path / "ref.wav"
-    dut_path = tmp_path / "dut.wav"
-    sf.write(ref_path, data, sr, subtype="PCM_24")
-    sf.write(dut_path, data, sr, subtype="PCM_24")
-
-    ref_out, _, validation = load_audio_pair(ref_path, dut_path, channels="ch0")
-    assert ref_out.ndim == 1
-    assert np.allclose(ref_out, data, atol=1e-9)
-    assert validation.metadata_ref.channels == 1
-
-    with pytest.raises(ValueError):
-        load_audio_pair(ref_path, dut_path, channels="ch1")
+    assert ref_side.ndim == 2
+    assert np.allclose(ref_side[:, 0], expected_side, atol=1e-12)
+    assert np.allclose(ref_side[:, 1], -expected_side, atol=1e-12)
 
 
 def test_normalize_peak_and_rms(tmp_path: Path) -> None:

@@ -18,7 +18,7 @@ from microstructure_metrics.io.validation import (
     validate_audio_pair,
 )
 
-ChannelsMode = Literal["ch0", "ch1", "stereo", "mid", "side"]
+ChannelsMode = Literal["stereo", "mid", "side"]
 
 
 def load_audio_pair(
@@ -28,8 +28,7 @@ def load_audio_pair(
     validate: bool = True,
     allow_resample: bool = False,
     target_sample_rate: int | None = None,
-    channel: int | None = None,
-    channels: ChannelsMode | None = None,
+    channels: ChannelsMode = "stereo",
     remove_dc: bool = True,
     dc_method: Literal["mean", "highpass"] = "mean",
     dc_cutoff_hz: float = 10.0,
@@ -51,18 +50,11 @@ def load_audio_pair(
     pre_warnings: list[str] = []
     pre_errors: list[str] = []
 
-    if channel is not None and channels is not None:
-        raise ValueError("--channel と --channels は同時に指定できません。")
-
-    ref_data, ref_warning = _select_channels(
-        ref_data, channel=channel, channels=channels
-    )
+    ref_data, ref_warning = _select_channels(ref_data, channels=channels)
     if ref_warning:
         pre_warnings.append(f"reference: {ref_warning}")
 
-    dut_data, dut_warning = _select_channels(
-        dut_data, channel=channel, channels=channels
-    )
+    dut_data, dut_warning = _select_channels(dut_data, channels=channels)
     if dut_warning:
         pre_warnings.append(f"dut: {dut_warning}")
 
@@ -130,60 +122,39 @@ def _read_audio(path: Path) -> tuple[np.ndarray, int, int]:
     return data.astype(np.float64), sample_rate, bit_depth
 
 
-def _select_channel(
-    data: np.ndarray, channel: int | None
-) -> tuple[np.ndarray, str | None]:
-    if data.ndim == 1:
-        return data.astype(np.float64), None
-    channels = data.shape[1]
-    if channels == 1:
-        return data[:, 0].astype(np.float64), None
-    if channel is None:
-        return data[:, 0].astype(np.float64), "stereo input; using channel 0"
-    if not 0 <= channel < channels:
-        raise ValueError(f"channel index must be in [0, {channels - 1}]")
-    return data[:, channel].astype(np.float64), None
-
-
 def _select_channels(
-    data: np.ndarray, *, channel: int | None, channels: ChannelsMode | None
+    data: np.ndarray, *, channels: ChannelsMode
 ) -> tuple[np.ndarray, str | None]:
-    """Channel selection/downmix strategy."""
+    """Channel selection/downmix strategy.
+
+    後方互換は捨て、I/Oは常に2chへ正規化する。
+    - mono入力: stereoとして複製
+    - 2ch以上: 先頭2chのみ使用
+    """
     arr = np.asarray(data, dtype=np.float64)
-    if channels is None:
-        return _select_channel(arr, channel)
-
+    warning: str | None = None
     if arr.ndim == 1:
-        if channels == "ch0":
-            return arr.astype(np.float64), None
-        raise ValueError(f"{channels} を選択するには2ch以上の入力が必要です。")
-
-    available = arr.shape[1]
-
-    if channels in {"ch0", "ch1"}:
-        index = 0 if channels == "ch0" else 1
-        if available <= index:
-            raise ValueError(f"要求されたチャンネル {channels} が存在しません。")
-        return arr[:, index].astype(np.float64), None
+        arr2 = np.stack([arr, arr], axis=1)
+        warning = "mono input; duplicated to stereo"
+    else:
+        if arr.shape[1] == 1:
+            arr2 = np.stack([arr[:, 0], arr[:, 0]], axis=1)
+            warning = "single-channel input; duplicated to stereo"
+        else:
+            if arr.shape[1] > 2:
+                warning = "multi-channel input; using first 2 channels"
+            arr2 = arr[:, :2]
 
     if channels == "stereo":
-        if available < 2:
-            raise ValueError("stereo を選択するには2ch以上の入力が必要です。")
-        warning = None
-        if available > 2:
-            warning = "2chに切り詰めました（先頭2chのみ使用）。"
-        return arr[:, :2].astype(np.float64), warning
-
-    if channels in {"mid", "side"}:
-        if available < 2:
-            raise ValueError(f"{channels} を生成するには2ch以上の入力が必要です。")
-        base = arr[:, :2]
-        if channels == "mid":
-            mixed = 0.5 * (base[:, 0] + base[:, 1])
-        else:
-            mixed = 0.5 * (base[:, 0] - base[:, 1])
-        return mixed.astype(np.float64), None
-
+        return arr2.astype(np.float64), warning
+    if channels == "mid":
+        mid = 0.5 * (arr2[:, 0] + arr2[:, 1])
+        stereo_mid = np.stack([mid, mid], axis=1)
+        return stereo_mid.astype(np.float64), warning
+    if channels == "side":
+        side = 0.5 * (arr2[:, 0] - arr2[:, 1])
+        stereo_side = np.stack([side, -side], axis=1)
+        return stereo_side.astype(np.float64), warning
     raise ValueError(f"Unsupported channels mode: {channels}")
 
 

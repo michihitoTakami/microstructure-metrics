@@ -75,9 +75,11 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert json_path.exists()
     payload = json.loads(json_path.read_text())
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1"}
+    ch0 = payload["metrics"]["ch0"]
     for key in ["thd_n", "transient", "mps", "tfs"]:
-        assert key in payload["metrics"]
-    tfs_payload = payload["metrics"]["tfs"]
+        assert key in ch0
+    tfs_payload = ch0["tfs"]
     for key in [
         "percentile_05_correlation",
         "correlation_variance",
@@ -88,7 +90,7 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
         "envelope_threshold_db",
     ]:
         assert key in tfs_payload
-    transient_payload = payload["metrics"]["transient"]
+    transient_payload = ch0["transient"]
     for key in [
         "low_level_attack_time_delta_ms",
         "pre_energy_fraction_dut",
@@ -102,17 +104,19 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 10
     assert "plots" in payload
     plots = payload["plots"]
-    assert Path(plots["mps_delta_heatmap"]).exists()
-    assert Path(plots["tfs_correlation_timeseries"]).exists()
+    assert "ch0" in plots
+    assert Path(plots["ch0"]["mps_delta_heatmap"]).exists()
+    assert Path(plots["ch0"]["tfs_correlation_timeseries"]).exists()
     assert plot_dir.exists()
 
     assert csv_path.exists()
     csv_body = csv_path.read_text()
-    assert "thd_n" in csv_body
+    assert "ch0.thd_n" in csv_body
     assert md_path.exists()
     md_body = md_path.read_text()
     assert "Microstructure Metrics Report" in md_body
     assert "PLOTS" in md_body
+    assert "## ch0" in md_body
 
 
 def test_cli_report_channels_stereo(tmp_path: Path) -> None:
@@ -179,7 +183,7 @@ def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:
     payload = json.loads(json_path.read_text())
     # no-align でも metrics が生成され、alignment は delay 0 のダミー
     assert payload["alignment"]["delay_samples"] == 0.0
-    assert payload["metrics"]["thd_n"]
+    assert payload["metrics"]["ch0"]["thd_n"]
 
 
 def test_cli_report_fails_without_resample_permission(tmp_path: Path) -> None:
