@@ -438,9 +438,9 @@ def _generate_complex_bass(
     highcut: float | None,
     rng: np.random.Generator,
 ) -> tuple[npt.NDArray[np.float64], dict[str, object], str]:
-    min_freq = max(lowcut or 0.0, 25.0)
-    max_freq = highcut if highcut not in (None, 0) else 220.0
-    max_freq = min(max_freq, 260.0)
+    min_freq = max(float(lowcut) if lowcut is not None else 0.0, 25.0)
+    max_highcut = 220.0 if highcut is None or highcut == 0 else float(highcut)
+    max_freq = min(max_highcut, 260.0)
     if max_freq <= min_freq:
         raise ValueError("complex-bass requires highcut > lowcut.")
 
@@ -473,7 +473,7 @@ def _generate_complex_bass(
     body = _scale_to_dbfs(body, -2.0, mode="peak")
 
     descriptor = f"{int(min_freq)}to{int(max_freq)}hz"
-    extra_meta = {
+    extra_meta: dict[str, object] = {
         "bass_components_hz": [float(f) for f in freqs],
         "bass_fm_dev_hz": fm_dev_hz,
         "bass_fm_rates_hz": [float(f) for f in fm_rates],
@@ -507,9 +507,11 @@ def _generate_binaural_cues(
     rng: np.random.Generator,
 ) -> tuple[npt.NDArray[np.float64], dict[str, object], str]:
     nyquist = sample_rate / 2
-    base_low = max(lowcut or 0.0, 150.0)
-    base_high = highcut if highcut not in (None, 0) else nyquist * 0.95
-    base_high = min(base_high, nyquist * 0.95)
+    base_low = max(float(lowcut) if lowcut is not None else 0.0, 150.0)
+    base_high_raw = (
+        nyquist * 0.95 if highcut is None or highcut == 0 else float(highcut)
+    )
+    base_high = min(base_high_raw, nyquist * 0.95)
     if base_high <= base_low:
         raise ValueError("binaural-cues requires highcut > lowcut.")
 
@@ -535,7 +537,7 @@ def _generate_binaural_cues(
     stereo = _scale_to_dbfs(stereo, -3.0, mode="peak")
 
     descriptor = f"itd{itd_ms:g}ms_ild{ild_abs:g}db"
-    extra_meta = {
+    extra_meta: dict[str, object] = {
         "itd_ms": float(itd_ms),
         "ild_db": float(ild_db),
         "base_noise_lowcut_hz": float(base_low),
@@ -595,7 +597,7 @@ def _generate_ms_side_texture(
     stereo = _scale_to_dbfs(stereo, -3.0, mode="peak")
 
     descriptor = f"side{int(side_min)}hz"
-    extra_meta = {
+    extra_meta: dict[str, object] = {
         "mid_band_lowcut_hz": 80.0,
         "mid_band_highcut_hz": 3200.0,
         "side_tones_hz": [float(f) for f in freqs],
