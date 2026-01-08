@@ -75,10 +75,14 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert json_path.exists()
     payload = json.loads(json_path.read_text())
-    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural"}
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural", "divergence"}
     binaural = payload["metrics"]["binaural"]
     assert "summary" in binaural
     assert "median_abs_delta_itd_ms" in binaural["summary"]
+    divergence = payload["metrics"]["divergence"]
+    assert divergence["available"] is True
+    assert "mdi_total" in divergence
+    assert "channel_totals" in divergence
     ch0 = payload["metrics"]["ch0"]
     for key in ["thd_n", "transient", "mps", "tfs", "bass", "residual"]:
         assert key in ch0
@@ -148,7 +152,7 @@ def test_cli_report_channels_stereo(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(json_path.read_text())
-    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural"}
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural", "divergence"}
     for channel_key in ["ch0", "ch1"]:
         ch_metrics = payload["metrics"][channel_key]
         for key in ["thd_n", "transient", "mps", "tfs", "bass", "residual"]:

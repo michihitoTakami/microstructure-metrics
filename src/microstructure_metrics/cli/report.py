@@ -22,6 +22,7 @@ from microstructure_metrics.io import load_audio_pair
 from microstructure_metrics.metrics import (
     BassResult,
     BinauralResult,
+    MicrostructureDistributionDivergenceResult,
     MPSSimilarityResult,
     ResidualMicrostructureResult,
     TFSCorrelationResult,
@@ -29,6 +30,7 @@ from microstructure_metrics.metrics import (
     TransientResult,
     calculate_binaural_cue_preservation,
     calculate_low_freq_complex_reconstruction,
+    calculate_microstructure_distribution_divergence,
     calculate_mps_similarity,
     calculate_residual_microstructure,
     calculate_tfs_correlation,
@@ -461,6 +463,25 @@ def report(
         else _binaural_unavailable(binaural_error)
     )
 
+    divergence_error: str | None = None
+    try:
+        divergence_result = calculate_microstructure_distribution_divergence(
+            tfs_by_channel={k: v.tfs for k, v in metrics_by_channel.items()},
+            transient_by_channel={
+                k: v.transient for k, v in metrics_by_channel.items()
+            },
+            binaural=binaural_result,
+        )
+    except ValueError as exc:
+        divergence_result = None
+        divergence_error = str(exc)
+
+    metrics_payload["divergence"] = (
+        _divergence_summary(divergence_result)
+        if divergence_result is not None
+        else _divergence_unavailable(divergence_error)
+    )
+
     json_path = Path(output_json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -804,6 +825,24 @@ def _binaural_summary(result: BinauralResult) -> dict[str, object]:
 
 def _binaural_unavailable(reason: str | None) -> dict[str, object]:
     return {"available": False, "reason": reason or "stereo processing required"}
+
+
+def _divergence_summary(
+    result: MicrostructureDistributionDivergenceResult,
+) -> dict[str, object]:
+    return {
+        "available": True,
+        "mdi_total": float(result.mdi_total),
+        "channels_total": float(result.channels_total),
+        "binaural_total": float(result.binaural_total),
+        "channel_totals": {k: float(v) for k, v in result.channel_totals.items()},
+        "component_totals": {k: float(v) for k, v in result.component_totals.items()},
+        "n_components": int(len(result.components)),
+    }
+
+
+def _divergence_unavailable(reason: str | None) -> dict[str, object]:
+    return {"available": False, "reason": reason or "insufficient inputs"}
 
 
 def _transient_summary(result: TransientResult) -> dict[str, object]:
