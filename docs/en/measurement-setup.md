@@ -5,7 +5,7 @@ Purpose: ensure repeatable playback/recording of the test signals defined in `do
 ## Common requirements
 - Sample rate: 48 kHz (96 kHz only for high-band/TFS cases)
 - Bit depth: 24-bit PCM (or 32-bit float)
-- Channels: mono preferred. If stereo capture is unavoidable, keep identical content on L/R and pick a channel later.
+- Channels: stereo (2ch) preferred. Mono inputs are duplicated to stereo internally.
 - Player: bit-perfect/exclusive (`hw:` etc.). Disable EQ/AGC/DSP/resampling.
 - Level: digital gain = 0 dB; peaks < -1 dBFS; pilot ≈ -6 dBFS.
 - Do not trim: keep lead/tail silence intact.
@@ -28,7 +28,7 @@ Purpose: ensure repeatable playback/recording of the test signals defined in `do
 1. Playback: output the test WAV at 48 kHz / 24-bit; disable EQ/resampler.
 2. Amplification: connect DUT to load; set level to avoid clipping.
 3. Capture: ADC at 48 kHz / 24-bit. Adjust gain so pilot ≈ -6 dBFS with ≥6 dB headroom.
-4. Save WAV (mono). Name files consistently (e.g., `{signal_name}_dut.wav`); keep metadata JSON alongside if available.
+4. Save WAV (stereo/2ch). Name files consistently (e.g., `{signal_name}_dut.wav`); keep metadata JSON alongside if available.
 5. Verify using the checklist below.
 
 ## Post-recording checklist

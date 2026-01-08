@@ -21,7 +21,7 @@ Scope: define test signal structure, file/metadata formats, and naming rules for
 ## File format
 - Sample rate: 48 kHz required (96 kHz only when explicitly needed).
 - Bit depth: 24-bit PCM preferred; 32f allowed.
-- Channels: mono; if stereo capture, analyze channels separately.
+- Channels: stereo (2ch) by default. Mono inputs are duplicated to stereo internally.
 - Container: WAV (PCM or IEEE float). Avoid metadata that triggers gain changes.
 
 ## Naming convention

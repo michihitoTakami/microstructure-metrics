@@ -135,13 +135,14 @@ def test_cli_align_outputs_files(tmp_path: Path) -> None:
     meta_path = ref_path.with_name(f"{ref_path.stem}_alignment.json")
     assert out_ref.exists() and out_dut.exists() and meta_path.exists()
 
-    aligned_ref, sr_ref = sf.read(out_ref)
-    aligned_dut, sr_dut = sf.read(out_dut)
+    aligned_ref, sr_ref = sf.read(out_ref, always_2d=True)
+    aligned_dut, sr_dut = sf.read(out_dut, always_2d=True)
     assert sr_ref == sr_dut == common.sample_rate
     assert aligned_ref.shape == aligned_dut.shape
-    corr = np.corrcoef(aligned_ref, aligned_dut)[0, 1]
+    corr = np.corrcoef(aligned_ref[:, 0], aligned_dut[:, 0])[0, 1]
     assert corr > 0.9
 
     meta = json.loads(meta_path.read_text())
     assert meta["sample_rate"] == common.sample_rate
     assert abs(meta["delay_samples"] - delay_samples) < 5
+    assert meta["channels"] == 2
