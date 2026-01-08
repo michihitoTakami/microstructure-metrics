@@ -1,7 +1,7 @@
 # Microstructure Metrics
 
 Human-perception-oriented DAC/AMP microdynamics evaluation suite.
-Provides offline alignment, drift estimation, signal generation, and four metrics (THD+N / MPS / TFS / Transient) in one pipeline.
+Provides offline alignment, drift estimation, signal generation, and key metrics (THD+N / MPS / TFS / Transient / LFCR / BCP / RMI) in one pipeline.
 
 ## Why this project
 
@@ -18,6 +18,9 @@ Modern DAC/AMPs often exceed 120 dB SINAD, yet steady-state metrics alone cannot
 | Modulation Power Spectrum (MPS) | Texture preservation (correlation/distance) |
 | Temporal Fine Structure (TFS) | High-band phase coherence & group-delay stability |
 | Transient / Edge rounding | Edge sharpness vs smearing in clicks/impulses |
+| Low-Frequency Complex Reconstruction (LFCR) | Bass waveform fidelity (cycle shape / harmonic phase) |
+| Binaural Cue Preservation (BCP) | ITD/ILD/IACC preservation (spatial cue stability) |
+| Residual Microstructure Information (RMI) | Residual “structure” vs noise (burstiness/whiteness/modulation) |
 
 ### MPS options (S-09)
 - Log-scale modulation grid (`mod_scale="log"`, `num_mod_bins`).

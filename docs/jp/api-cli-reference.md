@@ -76,6 +76,8 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
   - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
   - Binaural出力項目: `median_abs_delta_itd_ms` / `p95_abs_delta_itd_ms` / `itd_outlier_rate` / `median_abs_delta_ild_db` / `p95_abs_delta_ild_db` / `iacc_p05` など
   - LFCR出力項目: `cycle_shape_corr_mean` / `cycle_shape_corr_p05` / `harmonic_phase_coherence` / `envelope_diff_outlier_rate` / 帯域別 `band_metrics.*`
+  - RMI(residual)出力項目: `burstiness.kurtosis` / `burstiness.crest_factor` / `burstiness.p99_abs` / `whiteness.spectral_flatness` / `whiteness.autocorr_peak_excess` / `modulation.high_mod_ratio_4_64` など
+    - JSON上の参照例: `metrics.ch0.residual.whiteness.spectral_flatness`
 - 例: JSON と Markdown を保存
 ```
 uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
@@ -89,6 +91,6 @@ uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
 
 ## Python API エントリポイント
 - アライメント/ドリフト: `microstructure_metrics.alignment.align_audio_pair`, `estimate_clock_drift`
-- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_mps_similarity`, `calculate_tfs_correlation`, `calculate_transient_metrics`
+- 指標: `microstructure_metrics.metrics.calculate_thd_n`, `calculate_mps_similarity`, `calculate_tfs_correlation`, `calculate_transient_metrics`, `calculate_low_freq_complex_reconstruction`, `calculate_binaural_cue_preservation`, `calculate_residual_microstructure`
 - 信号生成: `microstructure_metrics.signals.build_signal`
 各APIは numpy array とサンプルレートを受け取り、結果dataclassを返す。
