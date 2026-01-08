@@ -10,6 +10,12 @@ from microstructure_metrics.metrics.binaural import (
     BinauralResult,
     calculate_binaural_cue_preservation,
 )
+from microstructure_metrics.metrics.divergence import (
+    DivergenceComponent,
+    MicrostructureDistributionDivergenceResult,
+    calculate_microstructure_distribution_divergence,
+    wasserstein_1d,
+)
 from microstructure_metrics.metrics.mps import (
     MPSResult,
     MPSSimilarityResult,
@@ -45,6 +51,10 @@ __all__ = [
     "BinauralBandStats",
     "BinauralResult",
     "calculate_binaural_cue_preservation",
+    "DivergenceComponent",
+    "MicrostructureDistributionDivergenceResult",
+    "calculate_microstructure_distribution_divergence",
+    "wasserstein_1d",
     "BassBandMetrics",
     "BassResult",
     "calculate_low_freq_complex_reconstruction",
