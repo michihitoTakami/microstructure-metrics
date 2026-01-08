@@ -153,7 +153,12 @@ def _select_channels(
     if channels is None:
         return _select_channel(arr, channel)
 
-    available = 1 if arr.ndim == 1 else arr.shape[1]
+    if arr.ndim == 1:
+        if channels == "ch0":
+            return arr.astype(np.float64), None
+        raise ValueError(f"{channels} を選択するには2ch以上の入力が必要です。")
+
+    available = arr.shape[1]
 
     if channels in {"ch0", "ch1"}:
         index = 0 if channels == "ch0" else 1

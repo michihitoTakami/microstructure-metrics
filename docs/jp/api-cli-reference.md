@@ -15,6 +15,7 @@ uv run microstructure-metrics generate <signal_type> [options]
   - `--sample-rate,-sr` (int, default 48000)
   - `--bit-depth,-bd` ("24bit" or "32f")
   - `--duration,-d` (sec, default 10.0) テスト本体長
+  - `--channels` ("ch0|ch1|stereo|mid|side"): 指定時はステレオ出力（mono生成信号を2chへ配置/複製）
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`

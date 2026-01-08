@@ -179,6 +179,23 @@ def test_channels_option_conflict_with_channel(tmp_path: Path) -> None:
         load_audio_pair(ref_path, dut_path, channel=0, channels="stereo")
 
 
+def test_channels_option_ch0_on_mono_input_is_noop(tmp_path: Path) -> None:
+    sr = 48_000
+    data = _sine(0.05, sr, amplitude=0.2)
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, data, sr, subtype="PCM_24")
+    sf.write(dut_path, data, sr, subtype="PCM_24")
+
+    ref_out, _, validation = load_audio_pair(ref_path, dut_path, channels="ch0")
+    assert ref_out.ndim == 1
+    assert np.allclose(ref_out, data, atol=1e-9)
+    assert validation.metadata_ref.channels == 1
+
+    with pytest.raises(ValueError):
+        load_audio_pair(ref_path, dut_path, channels="ch1")
+
+
 def test_normalize_peak_and_rms(tmp_path: Path) -> None:
     sr = 48_000
     dur = 0.1

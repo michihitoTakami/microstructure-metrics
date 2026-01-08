@@ -86,6 +86,35 @@ def test_generate_thd_creates_wav_and_json(tmp_path: Path) -> None:
     assert -10.5 <= pilot_dbfs <= -8.0
 
 
+def test_generate_thd_stereo_channels(tmp_path: Path) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / "thd_stereo.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "thd",
+            "--duration",
+            "0.2",
+            "--output",
+            str(wav_path),
+            "--with-metadata",
+            "--channels",
+            "stereo",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data, sample_rate = sf.read(wav_path, always_2d=True)
+    assert sample_rate == 48_000
+    assert data.shape[1] == 2
+    assert np.allclose(data[:, 0], data[:, 1], atol=1e-12)
+
+    meta_path = wav_path.with_suffix(".json")
+    payload = meta_path.read_text()
+    assert '"channels": 2' in payload
+
+
 def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
     runner = CliRunner()
     wav_path = tmp_path / "tfs.wav"

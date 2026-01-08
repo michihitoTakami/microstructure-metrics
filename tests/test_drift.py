@@ -91,3 +91,10 @@ def test_check_drift_threshold_levels() -> None:
     assert check_drift_threshold(-15).severity == "low"
     assert check_drift_threshold(50).severity == "high"
     assert check_drift_threshold(-120).severity == "critical"
+
+
+def test_estimate_clock_drift_accepts_stereo_input() -> None:
+    reference, _ = _synthetic_signal(body_duration=2.0)
+    stereo = np.stack([reference, reference * 0.8], axis=1)
+    result = estimate_clock_drift(reference=stereo, dut=stereo, sample_rate=48_000)
+    assert abs(result.drift_ppm) < 0.1
