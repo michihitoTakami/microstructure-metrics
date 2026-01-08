@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -20,12 +20,14 @@ from microstructure_metrics.alignment import (
 )
 from microstructure_metrics.io import load_audio_pair
 from microstructure_metrics.metrics import (
+    BassResult,
     BinauralResult,
     MPSSimilarityResult,
     TFSCorrelationResult,
     THDNResult,
     TransientResult,
     calculate_binaural_cue_preservation,
+    calculate_low_freq_complex_reconstruction,
     calculate_mps_similarity,
     calculate_tfs_correlation,
     calculate_thd_n,
@@ -45,6 +47,7 @@ class CalculatedMetrics:
     transient: TransientResult
     mps: MPSSimilarityResult
     tfs: TFSCorrelationResult
+    bass: BassResult
 
 
 MetricsPayload = dict[str, object]
@@ -262,6 +265,46 @@ MultiChannelMetricsPayload = dict[str, MetricsPayload]
     show_default=True,
     help="変調周波数の重み付け: none/high_mod(4Hz以上を強め、10Hz以上をさらに重視)",
 )
+@click.option(
+    "--bass-bands",
+    default="20-80,80-200",
+    show_default=True,
+    help="LFCRの低域帯域設定(Hz)。例: 20-80,80-200",
+)
+@click.option(
+    "--bass-filter-order",
+    type=click.IntRange(min=1),
+    default=4,
+    show_default=True,
+    help="LFCR用バンドパスのButterworth次数",
+)
+@click.option(
+    "--bass-cycle-points",
+    type=click.IntRange(min=16),
+    default=128,
+    show_default=True,
+    help="位相条件付き1周期波形のサンプル数",
+)
+@click.option(
+    "--bass-envelope-threshold-db",
+    type=float,
+    default=-50.0,
+    show_default=True,
+    help="LFCRサイクル抽出の包絡閾値(dBFS相対)",
+)
+@click.option(
+    "--bass-harmonic-max-order",
+    type=click.IntRange(min=2),
+    default=5,
+    show_default=True,
+    help="倍音位相整合で見る最大次数",
+)
+@click.option(
+    "--bass-fundamental-range",
+    default="30-180",
+    show_default=True,
+    help="倍音位相整合の基本周波数探索範囲(Hz, low-high)",
+)
 def report(
     reference: str,
     dut: str,
@@ -297,6 +340,12 @@ def report(
     mps_norm: str,
     mps_band_weighting: str,
     mps_mod_weighting: str,
+    bass_bands: str,
+    bass_filter_order: int,
+    bass_cycle_points: int,
+    bass_envelope_threshold_db: float,
+    bass_harmonic_max_order: int,
+    bass_fundamental_range: str,
 ) -> None:
     """リファレンス/DUT WAVを整列し、全指標を計算してレポートする。"""
     try:
@@ -311,6 +360,11 @@ def report(
         raise click.ClickException(str(exc)) from exc
 
     sample_rate = validation.metadata_ref.sample_rate
+
+    resolved_bass_bands = _parse_band_ranges(bass_bands, option_name="--bass-bands")
+    resolved_fundamental_range = _parse_hz_range(
+        bass_fundamental_range, option_name="--bass-fundamental-range"
+    )
 
     drift_result = estimate_clock_drift(
         reference=ref_data,
@@ -377,6 +431,12 @@ def report(
             mps_norm=mps_norm,
             mps_band_weighting=mps_band_weighting,
             mps_mod_weighting=mps_mod_weighting,
+            bass_bands=resolved_bass_bands,
+            bass_filter_order=bass_filter_order,
+            bass_cycle_points=bass_cycle_points,
+            bass_envelope_threshold_db=bass_envelope_threshold_db,
+            bass_harmonic_max_order=bass_harmonic_max_order,
+            bass_fundamental_range=resolved_fundamental_range,
         )
     metrics_payload: MultiChannelMetricsPayload = {
         name: _metrics_to_payload(metric) for name, metric in metrics_by_channel.items()
@@ -474,6 +534,12 @@ def _calculate_metrics(
     mps_norm: str,
     mps_band_weighting: str,
     mps_mod_weighting: str,
+    bass_bands: Sequence[tuple[float, float]],
+    bass_filter_order: int,
+    bass_cycle_points: int,
+    bass_envelope_threshold_db: float,
+    bass_harmonic_max_order: int,
+    bass_fundamental_range: tuple[float, float],
 ) -> CalculatedMetrics:
     """各指標を計算し、後続処理で利用しやすい形へまとめる。"""
     thd = calculate_thd_n(
@@ -510,8 +576,25 @@ def _calculate_metrics(
         dut=aligned_dut,
         sample_rate=sample_rate,
     )
+    bass = calculate_low_freq_complex_reconstruction(
+        reference=aligned_ref,
+        dut=aligned_dut,
+        sample_rate=sample_rate,
+        bands_hz=bass_bands,
+        filter_order=bass_filter_order,
+        cycle_points=bass_cycle_points,
+        envelope_threshold_db=bass_envelope_threshold_db,
+        harmonic_max_order=bass_harmonic_max_order,
+        fundamental_search_hz=bass_fundamental_range,
+    )
 
-    return CalculatedMetrics(thd=thd, transient=transient, mps=mps, tfs=tfs)
+    return CalculatedMetrics(
+        thd=thd,
+        transient=transient,
+        mps=mps,
+        tfs=tfs,
+        bass=bass,
+    )
 
 
 def _metrics_to_payload(metrics: CalculatedMetrics) -> MetricsPayload:
@@ -520,6 +603,7 @@ def _metrics_to_payload(metrics: CalculatedMetrics) -> MetricsPayload:
         "transient": _transient_summary(metrics.transient),
         "mps": _mps_summary(metrics.mps),
         "tfs": _tfs_summary(metrics.tfs),
+        "bass": _bass_summary(metrics.bass),
     }
 
 
@@ -586,6 +670,41 @@ def _mps_summary(result: MPSSimilarityResult) -> dict[str, object]:
         "mps_distance_weighted": float(result.mps_distance_weighted),
         "mps_mod_weighting": str(result.mod_weighting),
         "band_correlations": band_corr,
+    }
+
+
+def _bass_summary(result: BassResult) -> dict[str, object]:
+    band_metrics = [
+        {
+            "band_hz": [float(edge) for edge in band.band_hz],
+            "cycle_shape_corr_mean": float(band.cycle_shape_corr_mean),
+            "cycle_shape_corr_p05": float(band.cycle_shape_corr_p05),
+            "harmonic_phase_coherence": float(band.harmonic_phase_coherence),
+            "envelope_diff_outlier_rate": float(band.envelope_diff_outlier_rate),
+            "cycles_used": int(band.cycles_used),
+            "fundamental_hz": float(band.fundamental_hz),
+            "harmonic_orders": [int(order) for order in band.harmonic_orders],
+            "cycle_points": int(band.cycle_points),
+            "weight": float(band.weight),
+        }
+        for band in result.band_metrics
+    ]
+    return {
+        "cycle_shape_corr_mean": float(result.cycle_shape_corr_mean),
+        "cycle_shape_corr_p05": float(result.cycle_shape_corr_p05),
+        "harmonic_phase_coherence": float(result.harmonic_phase_coherence),
+        "envelope_diff_outlier_rate": float(result.envelope_diff_outlier_rate),
+        "bands_hz": [[float(low), float(high)] for low, high in result.bands_hz],
+        "band_metrics": band_metrics,
+        "filter_order": int(result.filter_order),
+        "cycle_points": int(result.cycle_points),
+        "envelope_threshold_db": float(result.envelope_threshold_db),
+        "harmonic_max_order": int(result.harmonic_max_order),
+        "fundamental_search_hz": [
+            float(result.fundamental_search_hz[0]),
+            float(result.fundamental_search_hz[1]),
+        ],
+        "used_cycles": int(result.used_cycles),
     }
 
 
@@ -853,3 +972,56 @@ def _flatten_metric(
         else:
             flattened.append((metric_name, key, value))
     return flattened
+
+
+def _parse_band_ranges(
+    text: str, *, option_name: str = "--bass-bands"
+) -> tuple[tuple[float, float], ...]:
+    if not text.strip():
+        raise click.ClickException(
+            f"{option_name} は low-high,low-high 形式で指定してください"
+        )
+    bands: list[tuple[float, float]] = []
+    for part in text.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if "-" not in token:
+            raise click.ClickException(f"{option_name} は low-high 形式です: {token}")
+        low_str, high_str = token.split("-", 1)
+        try:
+            low = float(low_str)
+            high = float(high_str)
+        except ValueError as exc:
+            raise click.ClickException(
+                f"{option_name} に数値以外が含まれています: {token}"
+            ) from exc
+        if low <= 0 or high <= low:
+            raise click.ClickException(
+                f"{option_name} は 0 < low < high を満たす必要があります: {token}"
+            )
+        bands.append((low, high))
+    if not bands:
+        raise click.ClickException(f"{option_name} が空です")
+    return tuple(bands)
+
+
+def _parse_hz_range(
+    text: str, *, option_name: str = "--bass-fundamental-range"
+) -> tuple[float, float]:
+    token = text.strip()
+    if "-" not in token:
+        raise click.ClickException(f"{option_name} は low-high 形式です: {token}")
+    low_str, high_str = token.split("-", 1)
+    try:
+        low = float(low_str)
+        high = float(high_str)
+    except ValueError as exc:
+        raise click.ClickException(
+            f"{option_name} に数値以外が含まれています: {token}"
+        ) from exc
+    if low <= 0 or high <= low:
+        raise click.ClickException(
+            f"{option_name} は 0 < low < high を満たす必要があります: {token}"
+        )
+    return float(low), float(high)

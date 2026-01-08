@@ -69,10 +69,13 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
   - THD: `--fundamental-freq` `--expected-level-dbfs`
+  - LFCR (bass): `--bass-bands`(例:20-80,80-200) `--bass-filter-order` `--bass-cycle-points`
+    `--bass-envelope-threshold-db` `--bass-harmonic-max-order` `--bass-fundamental-range`
   - 出力: `--output-json` (default `metrics_report.json`), `--output-csv`, `--output-md`
   - 可視化: `--plot` (MPS差分ヒートマップ / TFS相関時系列を保存), `--plot-dir` (プロット出力先ディレクトリ)
   - TFS出力項目: `mean_correlation` / `percentile_05_correlation` / `correlation_variance` に加え、`frame_length_ms` `frame_hop_ms` `max_lag_ms` `envelope_threshold_db`
   - Binaural出力項目: `median_abs_delta_itd_ms` / `p95_abs_delta_itd_ms` / `itd_outlier_rate` / `median_abs_delta_ild_db` / `p95_abs_delta_ild_db` / `iacc_p05` など
+  - LFCR出力項目: `cycle_shape_corr_mean` / `cycle_shape_corr_p05` / `harmonic_phase_coherence` / `envelope_diff_outlier_rate` / 帯域別 `band_metrics.*`
 - 例: JSON と Markdown を保存
 ```
 uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \

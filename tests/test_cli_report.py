@@ -80,8 +80,9 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert "summary" in binaural
     assert "median_abs_delta_itd_ms" in binaural["summary"]
     ch0 = payload["metrics"]["ch0"]
-    for key in ["thd_n", "transient", "mps", "tfs"]:
+    for key in ["thd_n", "transient", "mps", "tfs", "bass"]:
         assert key in ch0
+    assert "bands_hz" in ch0["bass"]
     tfs_payload = ch0["tfs"]
     for key in [
         "percentile_05_correlation",
@@ -150,7 +151,7 @@ def test_cli_report_channels_stereo(tmp_path: Path) -> None:
     assert set(payload["metrics"].keys()) == {"ch0", "ch1", "binaural"}
     for channel_key in ["ch0", "ch1"]:
         ch_metrics = payload["metrics"][channel_key]
-        for key in ["thd_n", "transient", "mps", "tfs"]:
+        for key in ["thd_n", "transient", "mps", "tfs", "bass"]:
             assert key in ch_metrics
     assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 20
 
@@ -187,6 +188,7 @@ def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:
     # no-align でも metrics が生成され、alignment は delay 0 のダミー
     assert payload["alignment"]["delay_samples"] == 0.0
     assert payload["metrics"]["ch0"]["thd_n"]
+    assert "bass" in payload["metrics"]["ch0"]
     assert "binaural" in payload["metrics"]
 
 
