@@ -322,7 +322,10 @@ def _harmonic_phase_alignment(
         dut_phase = _phase_at(target, dut_spec)
         ref_rel = _wrap_phase(ref_phase - order * base_ref)
         dut_rel = _wrap_phase(dut_phase - order * base_dut)
-        phase_diffs.append(_wrap_phase(dut_rel - ref_rel))
+        phase_delta = float(
+            np.asarray(_wrap_phase(dut_rel - ref_rel), dtype=np.float64).item()
+        )
+        phase_diffs.append(phase_delta)
 
     if not phase_diffs:
         return tuple(used_orders), 0.0
