@@ -102,7 +102,7 @@ def align_audio_pair(
     def _alignment_view(signal: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
         if signal.ndim == 1:
             return signal
-        return np.mean(signal, axis=1)
+        return np.asarray(np.mean(signal, axis=1), dtype=np.float64)
 
     ref_view = _alignment_view(ref_signal)
     dut_view = _alignment_view(dut_signal)

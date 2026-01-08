@@ -45,6 +45,10 @@ class CalculatedMetrics:
     tfs: TFSCorrelationResult
 
 
+MetricsPayload = dict[str, dict[str, object]]
+MultiChannelMetricsPayload = dict[str, MetricsPayload]
+
+
 @click.command(name="report")
 @click.argument("reference", type=click.Path(exists=True, dir_okay=False))
 @click.argument("dut", type=click.Path(exists=True, dir_okay=False))
@@ -267,7 +271,7 @@ def report(
     allow_resample: bool,
     target_sample_rate: int | None,
     channel: int | None,
-    channels: str | None,
+    channels: Literal["ch0", "ch1", "stereo", "mid", "side"] | None,
     align: bool,
     pilot_freq: float,
     pilot_threshold: float,
@@ -349,6 +353,7 @@ def report(
         alignment = None
 
     metrics_by_channel: dict[str, CalculatedMetrics] = {}
+    metrics_payload: MetricsPayload | MultiChannelMetricsPayload
     if aligned_ref.ndim == 1:
         metrics_single = _calculate_metrics(
             aligned_ref=aligned_ref,
@@ -376,7 +381,7 @@ def report(
             mps_mod_weighting=mps_mod_weighting,
         )
         metrics_by_channel["mono"] = metrics_single
-        metrics_payload: dict[str, object] = _metrics_to_payload(metrics_single)
+        metrics_payload = _metrics_to_payload(metrics_single)
     else:
         for idx in range(aligned_ref.shape[1]):
             key = f"ch{idx}"
@@ -422,9 +427,12 @@ def report(
             else json_path.parent / f"{json_path.stem}_plots"
         )
         if aligned_ref.ndim == 1:
-            plot_payload = _generate_plots(
-                metrics=metrics_by_channel["mono"],
-                plot_dir=resolved_plot_dir,
+            plot_payload = cast(
+                dict[str, object],
+                _generate_plots(
+                    metrics=metrics_by_channel["mono"],
+                    plot_dir=resolved_plot_dir,
+                ),
             )
         else:
             plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
@@ -687,7 +695,7 @@ def _transient_summary(result: TransientResult) -> dict[str, object]:
     }
 
 
-def _write_csv(path: Path, metrics: dict[str, dict[str, object]]) -> None:
+def _write_csv(path: Path, metrics: Mapping[str, Mapping[str, object]]) -> None:
     rows: list[tuple[str, str, object]] = []
     for metric_name, metric_values in metrics.items():
         rows.extend(_flatten_metric(metric_name, metric_values))
