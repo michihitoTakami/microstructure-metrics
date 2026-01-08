@@ -20,6 +20,25 @@
 | TFS | High-band multitone | 4/6/8/10/12 kHz 等振幅, peak≈-6 dBFS, 8 s |
 | Transient | Impulse / tone burst train | インパルスまたはバースト列、ピーク -1 dBFS 付近、0.3–1.0 s |
 
+## 追加信号（Issue #70）
+- 共通: 標準タイムラインを維持し、48 kHz / 24-bit / stereo。WAVピークは -1 dBFS 以下。
+- `complex-bass`
+  - 25–260 Hz までに制限したランダム位相マルチトーン（8本）に軽い FM/PM（±3 Hz@0.3–1.1 Hz, 0.25 rad@0.4–1.6 Hz）を付与。
+  - バンド制限: highcut ≤260 Hz（`--highcut`指定時も 260 Hz で頭打ち）。目標ピーク -2 dBFS。
+  - 主なメタキー: `bass_components_hz`, `bass_fm_dev_hz`, `bass_fm_rates_hz`, `bass_pm_depth_rad`, `bass_pm_rates_hz`, `band_lowcut_hz`, `band_highcut_hz`, `target_peak_dbfs`。
+- `binaural-cues`（ステレオ差分保持）
+  - 150–12 kHz 帯域のピンクノイズに既知の ITD/ILD を埋め込み。デフォルト: `itd_ms=0.35`（右ch遅延）、`ild_db=+6`（右が6 dB低い）。
+  - 出力2chをそのまま保持（L/R複製は行わない）。目標ピーク -3 dBFS。
+  - 主なメタキー: `itd_ms`, `ild_db`, `base_noise_lowcut_hz`, `base_noise_highcut_hz`, `target_peak_dbfs`。
+- `ms-side-texture`（Mid/Side合成）
+  - Mid: 80–3200 Hz ピンクノイズ（約 -10 dBFS RMS）。Side: 4 kHz 以上の高域マルチトーン（`--min-freq`/`--tone-count`/`--tone-step`で調整）に5 Hz AM（深さ0.35）を掛けてテクスチャ化。
+  - L/R = 0.5*(Mid ± Side)。ピークを -3 dBFS 付近に正規化し、高域TFSをSide成分に集約。
+  - 主なメタキー: `mid_band_lowcut_hz`, `mid_band_highcut_hz`, `side_tones_hz`, `side_mod_freq_hz`, `side_mod_depth`, `side_target_peak_dbfs`, `target_peak_dbfs`。
+- 参考stem例:
+  - `complex_bass_25to260hz_48000_24bit_v1.wav`
+  - `binaural_cues_itd0.35ms_ild6db_48000_24bit_v1.wav`
+  - `ms_side_texture_side4000hz_48000_24bit_v1.wav`
+
 ## ファイルフォーマット
 - サンプルレート: 48 kHz 必須（高帯域検証のみ 96 kHz 可）。
 - ビット深度: 24-bit PCM 推奨（32f 可）。
