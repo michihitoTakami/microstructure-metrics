@@ -137,6 +137,48 @@ def test_channel_selection_with_index_and_bounds(tmp_path: Path) -> None:
         load_audio_pair(ref_path, dut_path, channel=5)
 
 
+def test_channels_option_stereo_mid_side(tmp_path: Path) -> None:
+    sr = 48_000
+    duration = 0.1
+    left = _sine(duration, sr, amplitude=0.3)
+    right = _sine(duration, sr, amplitude=0.15)
+    stereo = np.stack([left, right], axis=1)
+    dut = stereo * 0.9
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, stereo, sr, subtype="PCM_24")
+    sf.write(dut_path, dut, sr, subtype="PCM_24")
+
+    ref_stereo, dut_stereo, validation = load_audio_pair(
+        ref_path, dut_path, channels="stereo"
+    )
+    assert ref_stereo.shape[1] == 2
+    assert dut_stereo.shape == ref_stereo.shape
+    assert validation.metadata_ref.channels == 2
+
+    ref_mid, _, validation_mid = load_audio_pair(ref_path, dut_path, channels="mid")
+    expected_mid = 0.5 * (left + right)
+    assert ref_mid.ndim == 1
+    assert np.allclose(ref_mid, expected_mid, atol=1e-12)
+    assert validation_mid.metadata_ref.channels == 1
+
+    ref_side, _, _ = load_audio_pair(ref_path, dut_path, channels="side")
+    expected_side = 0.5 * (left - right)
+    assert np.allclose(ref_side, expected_side, atol=1e-12)
+
+
+def test_channels_option_conflict_with_channel(tmp_path: Path) -> None:
+    sr = 48_000
+    data = _sine(0.05, sr, amplitude=0.2)
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, data, sr, subtype="PCM_24")
+    sf.write(dut_path, data, sr, subtype="PCM_24")
+
+    with pytest.raises(ValueError):
+        load_audio_pair(ref_path, dut_path, channel=0, channels="stereo")
+
+
 def test_normalize_peak_and_rms(tmp_path: Path) -> None:
     sr = 48_000
     dur = 0.1

@@ -18,6 +18,8 @@ from microstructure_metrics.io.validation import (
     validate_audio_pair,
 )
 
+ChannelsMode = Literal["ch0", "ch1", "stereo", "mid", "side"]
+
 
 def load_audio_pair(
     reference_path: str | Path,
@@ -27,6 +29,7 @@ def load_audio_pair(
     allow_resample: bool = False,
     target_sample_rate: int | None = None,
     channel: int | None = None,
+    channels: ChannelsMode | None = None,
     remove_dc: bool = True,
     dc_method: Literal["mean", "highpass"] = "mean",
     dc_cutoff_hz: float = 10.0,
@@ -48,13 +51,20 @@ def load_audio_pair(
     pre_warnings: list[str] = []
     pre_errors: list[str] = []
 
-    ref_data, warning = _select_channel(ref_data, channel)
-    if warning:
-        pre_warnings.append(f"reference: {warning}")
+    if channel is not None and channels is not None:
+        raise ValueError("--channel と --channels は同時に指定できません。")
 
-    dut_data, warning = _select_channel(dut_data, channel)
-    if warning:
-        pre_warnings.append(f"dut: {warning}")
+    ref_data, ref_warning = _select_channels(
+        ref_data, channel=channel, channels=channels
+    )
+    if ref_warning:
+        pre_warnings.append(f"reference: {ref_warning}")
+
+    dut_data, dut_warning = _select_channels(
+        dut_data, channel=channel, channels=channels
+    )
+    if dut_warning:
+        pre_warnings.append(f"dut: {dut_warning}")
 
     target_sr = target_sample_rate or ref_sr
     if allow_resample or target_sample_rate is not None:
@@ -135,23 +145,66 @@ def _select_channel(
     return data[:, channel].astype(np.float64), None
 
 
+def _select_channels(
+    data: np.ndarray, *, channel: int | None, channels: ChannelsMode | None
+) -> tuple[np.ndarray, str | None]:
+    """Channel selection/downmix strategy."""
+    arr = np.asarray(data, dtype=np.float64)
+    if channels is None:
+        return _select_channel(arr, channel)
+
+    available = 1 if arr.ndim == 1 else arr.shape[1]
+
+    if channels in {"ch0", "ch1"}:
+        index = 0 if channels == "ch0" else 1
+        if available <= index:
+            raise ValueError(f"要求されたチャンネル {channels} が存在しません。")
+        return arr[:, index].astype(np.float64), None
+
+    if channels == "stereo":
+        if available < 2:
+            raise ValueError("stereo を選択するには2ch以上の入力が必要です。")
+        warning = None
+        if available > 2:
+            warning = "2chに切り詰めました（先頭2chのみ使用）。"
+        return arr[:, :2].astype(np.float64), warning
+
+    if channels in {"mid", "side"}:
+        if available < 2:
+            raise ValueError(f"{channels} を生成するには2ch以上の入力が必要です。")
+        base = arr[:, :2]
+        if channels == "mid":
+            mixed = 0.5 * (base[:, 0] + base[:, 1])
+        else:
+            mixed = 0.5 * (base[:, 0] - base[:, 1])
+        return mixed.astype(np.float64), None
+
+    raise ValueError(f"Unsupported channels mode: {channels}")
+
+
 def _compute_metadata(
     data: np.ndarray, *, sample_rate: int, bit_depth: int
 ) -> AudioMetadata:
     duration = data.shape[0] / sample_rate if sample_rate > 0 else 0.0
-    peak = float(np.max(np.abs(data))) if data.size else 0.0
-    rms = (
-        float(np.sqrt(np.mean(np.square(data), dtype=np.float64))) if data.size else 0.0
-    )
-    abs_data = np.abs(data) if data.size else np.array([], dtype=np.float64)
-    median = float(np.median(abs_data)) if abs_data.size else 0.0
-    p95 = float(np.percentile(abs_data, 95)) if abs_data.size else 0.0
-    dc = float(np.mean(data)) if data.size else 0.0
+    channels = 1 if data.ndim == 1 else data.shape[1]
+    flattened = data if data.ndim == 1 else data.reshape(-1, channels)
+    peak = float(np.max(np.abs(flattened))) if flattened.size else 0.0
+    if flattened.size:
+        rms = float(np.sqrt(np.mean(np.square(flattened), dtype=np.float64)))
+        abs_data = np.abs(flattened)
+        median = float(np.median(abs_data))
+        p95 = float(np.percentile(abs_data, 95))
+        dc = float(np.mean(flattened))
+    else:
+        rms = 0.0
+        median = 0.0
+        p95 = 0.0
+        dc = 0.0
     has_clipping = peak >= 0.999
     return AudioMetadata(
         sample_rate=sample_rate,
         bit_depth=bit_depth,
-        channels=1,
+        channels=int(channels),
         duration_sec=duration,
         peak_amplitude=peak,
         rms_amplitude=rms,

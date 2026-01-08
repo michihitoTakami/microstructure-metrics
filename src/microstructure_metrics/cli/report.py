@@ -93,6 +93,11 @@ class CalculatedMetrics:
     help="ステレオ入力時に使用するチャンネル（未指定ならch0）",
 )
 @click.option(
+    "--channels",
+    type=click.Choice(["ch0", "ch1", "stereo", "mid", "side"]),
+    help="ステレオ入力処理モード（--channel との同時指定不可）",
+)
+@click.option(
     "--align/--no-align",
     default=True,
     show_default=True,
@@ -262,6 +267,7 @@ def report(
     allow_resample: bool,
     target_sample_rate: int | None,
     channel: int | None,
+    channels: str | None,
     align: bool,
     pilot_freq: float,
     pilot_threshold: float,
@@ -288,6 +294,9 @@ def report(
     mps_mod_weighting: str,
 ) -> None:
     """リファレンス/DUT WAVを整列し、全指標を計算してレポートする。"""
+    if channel is not None and channels is not None:
+        raise click.ClickException("--channel と --channels は同時に指定できません。")
+
     try:
         ref_data, dut_data, validation = load_audio_pair(
             reference_path=reference,
@@ -295,6 +304,7 @@ def report(
             allow_resample=allow_resample,
             target_sample_rate=target_sample_rate,
             channel=channel,
+            channels=channels,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -338,47 +348,91 @@ def report(
         )
         alignment = None
 
-    metrics = _calculate_metrics(
-        aligned_ref=aligned_ref,
-        aligned_dut=aligned_dut,
-        sample_rate=sample_rate,
-        fundamental_freq=fundamental_freq,
-        expected_level_dbfs=expected_level_dbfs,
-        transient_smoothing_ms=transient_smoothing_ms,
-        transient_asymmetry_window_ms=transient_asymmetry_window_ms,
-        mps_filterbank=mps_filterbank,
-        mps_filterbank_kwargs={
-            "order": mps_filterbank_order,
-            "bandwidth_scale": mps_filterbank_bandwidth_scale,
-        },
-        mps_envelope_method=mps_envelope_method,
-        mps_envelope_lpf_hz=mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None,
-        mps_envelope_lpf_order=mps_envelope_lpf_order,
-        mps_mod_scale=mps_mod_scale,
-        mps_num_mod_bins=mps_num_mod_bins,
-        mps_scale=mps_scale,
-        mps_norm=mps_norm,
-        mps_band_weighting=mps_band_weighting,
-        mps_mod_weighting=mps_mod_weighting,
-    )
-
-    metrics_payload = _metrics_to_payload(metrics)
+    metrics_by_channel: dict[str, CalculatedMetrics] = {}
+    if aligned_ref.ndim == 1:
+        metrics_single = _calculate_metrics(
+            aligned_ref=aligned_ref,
+            aligned_dut=aligned_dut,
+            sample_rate=sample_rate,
+            fundamental_freq=fundamental_freq,
+            expected_level_dbfs=expected_level_dbfs,
+            transient_smoothing_ms=transient_smoothing_ms,
+            transient_asymmetry_window_ms=transient_asymmetry_window_ms,
+            mps_filterbank=mps_filterbank,
+            mps_filterbank_kwargs={
+                "order": mps_filterbank_order,
+                "bandwidth_scale": mps_filterbank_bandwidth_scale,
+            },
+            mps_envelope_method=mps_envelope_method,
+            mps_envelope_lpf_hz=(
+                mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None
+            ),
+            mps_envelope_lpf_order=mps_envelope_lpf_order,
+            mps_mod_scale=mps_mod_scale,
+            mps_num_mod_bins=mps_num_mod_bins,
+            mps_scale=mps_scale,
+            mps_norm=mps_norm,
+            mps_band_weighting=mps_band_weighting,
+            mps_mod_weighting=mps_mod_weighting,
+        )
+        metrics_by_channel["mono"] = metrics_single
+        metrics_payload: dict[str, object] = _metrics_to_payload(metrics_single)
+    else:
+        for idx in range(aligned_ref.shape[1]):
+            key = f"ch{idx}"
+            metrics_by_channel[key] = _calculate_metrics(
+                aligned_ref=aligned_ref[:, idx],
+                aligned_dut=aligned_dut[:, idx],
+                sample_rate=sample_rate,
+                fundamental_freq=fundamental_freq,
+                expected_level_dbfs=expected_level_dbfs,
+                transient_smoothing_ms=transient_smoothing_ms,
+                transient_asymmetry_window_ms=transient_asymmetry_window_ms,
+                mps_filterbank=mps_filterbank,
+                mps_filterbank_kwargs={
+                    "order": mps_filterbank_order,
+                    "bandwidth_scale": mps_filterbank_bandwidth_scale,
+                },
+                mps_envelope_method=mps_envelope_method,
+                mps_envelope_lpf_hz=(
+                    mps_envelope_lpf_hz if mps_envelope_lpf_hz > 0 else None
+                ),
+                mps_envelope_lpf_order=mps_envelope_lpf_order,
+                mps_mod_scale=mps_mod_scale,
+                mps_num_mod_bins=mps_num_mod_bins,
+                mps_scale=mps_scale,
+                mps_norm=mps_norm,
+                mps_band_weighting=mps_band_weighting,
+                mps_mod_weighting=mps_mod_weighting,
+            )
+        metrics_payload = {
+            name: _metrics_to_payload(metric)
+            for name, metric in metrics_by_channel.items()
+        }
 
     json_path = Path(output_json)
     json_path.parent.mkdir(parents=True, exist_ok=True)
 
     plot_enabled = plot or plot_dir is not None
-    plot_payload: dict[str, str] | None = None
+    plot_payload: dict[str, object] | None = None
     if plot_enabled:
         resolved_plot_dir = (
             Path(plot_dir)
             if plot_dir is not None
             else json_path.parent / f"{json_path.stem}_plots"
         )
-        plot_payload = _generate_plots(
-            metrics=metrics,
-            plot_dir=resolved_plot_dir,
-        )
+        if aligned_ref.ndim == 1:
+            plot_payload = _generate_plots(
+                metrics=metrics_by_channel["mono"],
+                plot_dir=resolved_plot_dir,
+            )
+        else:
+            plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
+            for name, metric in metrics_by_channel.items():
+                plot_payload[name] = _generate_plots(
+                    metrics=metric,
+                    plot_dir=resolved_plot_dir / name,
+                )
         click.echo(f"プロットを書き出しました: {resolved_plot_dir}")
 
     report_payload: dict[str, object] = {
@@ -688,15 +742,33 @@ def _render_plot_section(plots: Mapping[str, object], base_dir: Path) -> list[st
     plot_dir_value = plots.get("plot_dir")
     plot_dir_path = Path(str(plot_dir_value)) if plot_dir_value else None
 
-    for title, key in [
+    base_entries: list[tuple[str, str]] = []
+    nested_entries: list[tuple[str, str]] = []
+
+    targets = [
         ("MPS Delta Heatmap", "mps_delta_heatmap"),
         ("TFS Correlation", "tfs_correlation_timeseries"),
-    ]:
+    ]
+
+    for title, key in targets:
         plot_path = _extract_plot_path(plots, key)
         if plot_path is None:
             continue
         rendered = _path_for_markdown(Path(plot_path), base_dir)
-        entries.append((title, rendered))
+        base_entries.append((title, rendered))
+
+    if not base_entries:
+        for name, value in plots.items():
+            if name == "plot_dir" or not isinstance(value, Mapping):
+                continue
+            for title, key in targets:
+                plot_path = _extract_plot_path(value, key)
+                if plot_path is None:
+                    continue
+                rendered = _path_for_markdown(Path(plot_path), base_dir)
+                nested_entries.append((f"{name}: {title}", rendered))
+
+    entries.extend(base_entries if base_entries else nested_entries)
 
     if not entries:
         return lines

@@ -20,6 +20,20 @@ def _delayed_pair(common: CommonSignalConfig) -> tuple[np.ndarray, np.ndarray, i
     return reference, dut, delay_samples
 
 
+def _stereo_delayed_pair(
+    common: CommonSignalConfig,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    mono = build_signal("thd", common=common).data
+    left = mono
+    right = mono * 0.8
+    stereo = np.stack([left, right], axis=1)
+    delay_samples = int(0.0015 * common.sample_rate)
+    rng = np.random.default_rng(1)
+    dut = np.concatenate([np.zeros((delay_samples, 2)), stereo])
+    dut = dut + 1e-4 * rng.standard_normal(dut.shape)
+    return stereo, dut, delay_samples
+
+
 def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     common = CommonSignalConfig(duration=0.4)
     ref, dut, delay_samples = _delayed_pair(common)
@@ -99,6 +113,39 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     md_body = md_path.read_text()
     assert "Microstructure Metrics Report" in md_body
     assert "PLOTS" in md_body
+
+
+def test_cli_report_channels_stereo(tmp_path: Path) -> None:
+    common = CommonSignalConfig(duration=0.35)
+    ref, dut, delay_samples = _stereo_delayed_pair(common)
+    ref_path = tmp_path / "ref.wav"
+    dut_path = tmp_path / "dut.wav"
+    sf.write(ref_path, ref, samplerate=common.sample_rate)
+    sf.write(dut_path, dut, samplerate=common.sample_rate)
+
+    json_path = tmp_path / "report_stereo.json"
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "report",
+            str(ref_path),
+            str(dut_path),
+            "--channels",
+            "stereo",
+            "--output-json",
+            str(json_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(json_path.read_text())
+    assert set(payload["metrics"].keys()) == {"ch0", "ch1"}
+    for channel_key in ["ch0", "ch1"]:
+        ch_metrics = payload["metrics"][channel_key]
+        for key in ["thd_n", "transient", "mps", "tfs"]:
+            assert key in ch_metrics
+    assert abs(payload["alignment"]["delay_samples"] - delay_samples) < 20
 
 
 def test_cli_report_no_align_with_resample(tmp_path: Path) -> None:

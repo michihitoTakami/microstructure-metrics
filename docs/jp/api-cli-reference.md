@@ -62,7 +62,9 @@ uv run microstructure-metrics drift ref.wav dut.wav [options]
 uv run microstructure-metrics report ref.wav dut.wav [options]
 ```
 - 主なオプション:
-  - 入力処理: `--allow-resample` `--target-sample-rate` `--channel`
+  - 入力処理: `--allow-resample` `--target-sample-rate` `--channel` / `--channels`
+    - `--channel`: 従来の単一ch指定（整数インデックス）。後方互換のため残置。
+    - `--channels`: `ch0|ch1|stereo|mid|side` を選択。`stereo`はL/Rを保持、`mid/side`は M=(L+R)/2, S=(L-R)/2 でモノラル化。`--channel` と同時指定不可。
   - アライメント: `--align/--no-align` `--pilot-freq` `--pilot-threshold`
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
