@@ -52,7 +52,7 @@ pink_noise_48000_24bit_v1.wav
   "signal_type": "notched_noise",
   "sample_rate": 48000,
   "bit_depth": "24bit",
-  "channels": 1,
+  "channels": 2,
   "duration_sec": 10.0,
   "pilot_tone_freq_hz": 1000,
   "pilot_duration_ms": 100,
