@@ -244,6 +244,20 @@ def _parse_float_list(text: str) -> list[float]:
     help="click用: 擬似クリックの帯域制限 (Hz)",
 )
 @click.option(
+    "--itd-ms",
+    default=0.35,
+    show_default=True,
+    type=click.FloatRange(min=-5.0, max=5.0),
+    help="binaural-cues用: 右chの遅延量 (ms, 正で右が遅れる)",
+)
+@click.option(
+    "--ild-db",
+    default=6.0,
+    show_default=True,
+    type=click.FloatRange(min=-30.0, max=30.0),
+    help="binaural-cues用: 右ch-左chのレベル差 (dB, 正で右が小さい)",
+)
+@click.option(
     "--output",
     "-o",
     type=click.Path(),
@@ -288,6 +302,8 @@ def generate(
     gate_period_ms: float,
     click_level_dbfs: float,
     click_band_limit_hz: float,
+    itd_ms: float,
+    ild_db: float,
     output: str | None,
     with_metadata: bool,
 ) -> None:
@@ -339,13 +355,18 @@ def generate(
         raise click.ClickException(
             "--click-* は click 専用です（click以外では指定しないでください）"
         )
+    if normalized_type != "binaural-cues" and (itd_ms != 0.35 or ild_db != 6.0):
+        raise click.ClickException("--itd-ms/--ild-db は binaural-cues 専用です")
 
     def _write_one(*, result: SignalBuildResult, wav_path: Path) -> None:
         wav_path.parent.mkdir(parents=True, exist_ok=True)
-        # Backward-compat is intentionally dropped: always output stereo WAV.
-        data = np.stack([result.data, result.data], axis=1)
+        data = result.data
+        if data.ndim == 1:
+            data = np.stack([data, data], axis=1)
+        elif data.ndim == 2 and data.shape[1] == 1:
+            data = np.repeat(data, 2, axis=1)
         metadata = dict(result.metadata)
-        metadata["channels"] = 2
+        metadata["channels"] = int(data.shape[1])
         sf.write(
             wav_path,
             data,
@@ -395,6 +416,8 @@ def generate(
                 gate_period_ms=gate_period_ms,
                 click_level_dbfs=click_level_dbfs,
                 click_band_limit_hz=click_band_limit_hz,
+                binaural_itd_ms=itd_ms,
+                binaural_ild_db=ild_db,
             )
             wav_path = out_base / f"{result.suggested_stem}.wav"
             _write_one(result=result, wav_path=wav_path)
@@ -430,6 +453,8 @@ def generate(
         gate_period_ms=gate_period_ms,
         click_level_dbfs=click_level_dbfs,
         click_band_limit_hz=click_band_limit_hz,
+        binaural_itd_ms=itd_ms,
+        binaural_ild_db=ild_db,
     )
     wav_path = Path(output) if output else Path(f"{result.suggested_stem}.wav")
     _write_one(result=result, wav_path=wav_path)

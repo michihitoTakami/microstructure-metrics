@@ -19,6 +19,9 @@ SUPPORTED_SIGNALS = (
     "tone-burst",
     "am-attack",
     "click",
+    "complex-bass",
+    "binaural-cues",
+    "ms-side-texture",
 )
 
 
@@ -53,6 +56,7 @@ class SignalBuildResult:
     data: npt.NDArray[np.float64]
     metadata: dict[str, object]
     suggested_stem: str
+    channels: int
 
 
 def default_output_stem(
@@ -104,6 +108,8 @@ def build_signal(
     attack_ms: float = 2.0,
     release_ms: float = 10.0,
     gate_period_ms: float = 100.0,
+    binaural_itd_ms: float = 0.35,
+    binaural_ild_db: float = 6.0,
 ) -> SignalBuildResult:
     """Generate a test signal body + timeline and metadata."""
     normalized_type = signal_type.lower()
@@ -234,6 +240,33 @@ def build_signal(
             "click_level_dbfs": float(click_level_dbfs),
             "click_band_limit_hz": float(click_band_limit_hz),
         }
+    elif normalized_type == "complex-bass":
+        body, extra_meta, descriptor = _generate_complex_bass(
+            sample_rate=sample_rate,
+            samples=samples,
+            lowcut=noise_lowcut,
+            highcut=noise_highcut,
+            rng=rng,
+        )
+    elif normalized_type == "binaural-cues":
+        body, extra_meta, descriptor = _generate_binaural_cues(
+            sample_rate=sample_rate,
+            samples=samples,
+            lowcut=noise_lowcut,
+            highcut=noise_highcut,
+            itd_ms=binaural_itd_ms,
+            ild_db=binaural_ild_db,
+            rng=rng,
+        )
+    elif normalized_type == "ms-side-texture":
+        body, extra_meta, descriptor = _generate_ms_side_texture(
+            sample_rate=sample_rate,
+            samples=samples,
+            min_freq_hz=min_tone_freq,
+            tone_count=tone_count,
+            tone_step_hz=tone_step,
+            rng=rng,
+        )
     else:  # tfs-tones
         body, freqs = _generate_tfs_tones(
             sample_rate=sample_rate,
@@ -249,10 +282,12 @@ def build_signal(
         }
 
     timeline, duration_sec = _compose_timeline(body=body, common=common)
+    channels = timeline.shape[1] if timeline.ndim == 2 else 1
     metadata = _build_metadata(
         signal_type=normalized_type,
         common=common,
         duration_sec=duration_sec,
+        channels=channels,
         extra=extra_meta,
     )
 
@@ -262,6 +297,7 @@ def build_signal(
         suggested_stem=default_output_stem(
             normalized_type, common=common, descriptor=descriptor
         ),
+        channels=channels,
     )
 
 
@@ -269,7 +305,8 @@ def _compose_timeline(
     body: npt.NDArray[np.float64], common: CommonSignalConfig
 ) -> tuple[npt.NDArray[np.float64], float]:
     sr = common.sample_rate
-    pilot = _generate_pilot(
+    body_array = np.asarray(body, dtype=np.float64)
+    pilot_mono = _generate_pilot(
         sample_rate=sr,
         freq=common.pilot_freq,
         duration_ms=common.pilot_duration_ms,
@@ -277,9 +314,19 @@ def _compose_timeline(
         fade_ms=common.fade_ms,
     )
     silence_samples = int(sr * common.silence_duration_ms / 1000)
-    silence = np.zeros(silence_samples, dtype=np.float64)
+    if body_array.ndim == 1:
+        silence = np.zeros(silence_samples, dtype=np.float64)
+        timeline = np.concatenate(
+            [silence, pilot_mono, body_array, pilot_mono, silence]
+        )
+    elif body_array.ndim == 2:
+        channels = body_array.shape[1]
+        silence = np.zeros((silence_samples, channels), dtype=np.float64)
+        pilot = np.tile(pilot_mono[:, None], (1, channels))
+        timeline = np.concatenate([silence, pilot, body_array, pilot, silence], axis=0)
+    else:
+        raise ValueError("body must be 1D or 2D array")
 
-    timeline = np.concatenate([silence, pilot, body, pilot, silence])
     duration_sec = timeline.shape[0] / sr
     timeline = np.clip(timeline, -0.9999, 0.9999)
     return timeline.astype(np.float64), duration_sec
@@ -381,6 +428,185 @@ def _generate_click(
     cutoff = min(max(10.0, band_limit_hz), nyquist * 0.95)
     sos = signal.butter(4, cutoff / nyquist, btype="low", output="sos")
     return np.asarray(signal.sosfiltfilt(sos, body), dtype=np.float64)
+
+
+def _generate_complex_bass(
+    *,
+    sample_rate: int,
+    samples: int,
+    lowcut: float | None,
+    highcut: float | None,
+    rng: np.random.Generator,
+) -> tuple[npt.NDArray[np.float64], dict[str, object], str]:
+    min_freq = max(float(lowcut) if lowcut is not None else 0.0, 25.0)
+    max_highcut = 220.0 if highcut is None or highcut == 0 else float(highcut)
+    max_freq = min(max_highcut, 260.0)
+    if max_freq <= min_freq:
+        raise ValueError("complex-bass requires highcut > lowcut.")
+
+    tone_count = 8
+    freqs = np.linspace(min_freq, max_freq, tone_count)
+    t = np.arange(samples) / sample_rate
+    phases = rng.uniform(0, 2 * np.pi, tone_count)
+    fm_rates = rng.uniform(0.3, 1.1, tone_count)
+    pm_rates = rng.uniform(0.4, 1.6, tone_count)
+    fm_dev_hz = 3.0
+    pm_depth_rad = 0.25
+
+    components = []
+    for idx, base_freq in enumerate(freqs):
+        fm_rate = fm_rates[idx]
+        fm_phase = rng.uniform(0, 2 * np.pi)
+        pm_phase = rng.uniform(0, 2 * np.pi)
+        beta = fm_dev_hz / max(fm_rate, 1e-3)
+        phase = (
+            2 * np.pi * base_freq * t
+            + beta * np.sin(2 * np.pi * fm_rate * t + fm_phase)
+            + pm_depth_rad * np.sin(2 * np.pi * pm_rates[idx] * t + pm_phase)
+            + phases[idx]
+        )
+        components.append(np.sin(phase))
+    body = np.sum(components, axis=0) / max(len(components), 1)
+    body = _band_limit(
+        data=body, sample_rate=sample_rate, lowcut=min_freq, highcut=max_freq
+    )
+    body = _scale_to_dbfs(body, -2.0, mode="peak")
+
+    descriptor = f"{int(min_freq)}to{int(max_freq)}hz"
+    extra_meta: dict[str, object] = {
+        "bass_components_hz": [float(f) for f in freqs],
+        "bass_fm_dev_hz": fm_dev_hz,
+        "bass_fm_rates_hz": [float(f) for f in fm_rates],
+        "bass_pm_depth_rad": pm_depth_rad,
+        "bass_pm_rates_hz": [float(f) for f in pm_rates],
+        "band_lowcut_hz": float(min_freq),
+        "band_highcut_hz": float(max_freq),
+        "target_peak_dbfs": -2.0,
+    }
+    return body, extra_meta, descriptor
+
+
+def _apply_fractional_delay(
+    data: npt.NDArray[np.float64], delay_samples: float
+) -> npt.NDArray[np.float64]:
+    if data.size == 0:
+        return data
+    idx = np.arange(data.size, dtype=np.float64)
+    delayed = np.interp(idx - delay_samples, idx, data, left=0.0, right=0.0)
+    return delayed.astype(np.float64)
+
+
+def _generate_binaural_cues(
+    *,
+    sample_rate: int,
+    samples: int,
+    lowcut: float | None,
+    highcut: float | None,
+    itd_ms: float,
+    ild_db: float,
+    rng: np.random.Generator,
+) -> tuple[npt.NDArray[np.float64], dict[str, object], str]:
+    nyquist = sample_rate / 2
+    base_low = max(float(lowcut) if lowcut is not None else 0.0, 150.0)
+    base_high_raw = (
+        nyquist * 0.95 if highcut is None or highcut == 0 else float(highcut)
+    )
+    base_high = min(base_high_raw, nyquist * 0.95)
+    if base_high <= base_low:
+        raise ValueError("binaural-cues requires highcut > lowcut.")
+
+    base = _generate_pink_noise(
+        sample_rate=sample_rate,
+        samples=samples,
+        lowcut=base_low,
+        highcut=base_high,
+        rng=rng,
+    )
+    itd_samples = itd_ms * sample_rate / 1000.0
+    left = base
+    right = _apply_fractional_delay(base, itd_samples)
+
+    ild_abs = abs(float(ild_db))
+    if ild_db >= 0:
+        left_gain = 1.0
+        right_gain = _dbfs_to_amplitude(-ild_abs)
+    else:
+        left_gain = _dbfs_to_amplitude(-ild_abs)
+        right_gain = 1.0
+    stereo = np.column_stack([left_gain * left, right_gain * right])
+    stereo = _scale_to_dbfs(stereo, -3.0, mode="peak")
+
+    descriptor = f"itd{itd_ms:g}ms_ild{ild_abs:g}db"
+    extra_meta: dict[str, object] = {
+        "itd_ms": float(itd_ms),
+        "ild_db": float(ild_db),
+        "base_noise_lowcut_hz": float(base_low),
+        "base_noise_highcut_hz": float(base_high),
+        "target_peak_dbfs": -3.0,
+    }
+    return stereo, extra_meta, descriptor
+
+
+def _generate_ms_side_texture(
+    *,
+    sample_rate: int,
+    samples: int,
+    min_freq_hz: float,
+    tone_count: int,
+    tone_step_hz: float,
+    rng: np.random.Generator,
+) -> tuple[npt.NDArray[np.float64], dict[str, object], str]:
+    mid = _generate_pink_noise(
+        sample_rate=sample_rate,
+        samples=samples,
+        lowcut=80.0,
+        highcut=3200.0,
+        rng=rng,
+    )
+    mid = _scale_to_dbfs(mid, -10.0, mode="rms")
+
+    side_min = max(min_freq_hz, 4000.0)
+    freqs = [side_min + i * tone_step_hz for i in range(max(tone_count, 1))]
+    nyquist = sample_rate / 2
+    freqs = [f for f in freqs if f < nyquist * 0.95]
+    if not freqs:
+        raise ValueError("ms-side-texture requires side frequencies below Nyquist.")
+
+    t = np.arange(samples) / sample_rate
+    phases = rng.uniform(0, 2 * np.pi, len(freqs))
+    mod_freq_hz = 5.0
+    mod_depth = 0.35
+    mod_phase = rng.uniform(0, 2 * np.pi)
+    side_components = [
+        np.sin(2 * np.pi * f * t + phases[idx]) for idx, f in enumerate(freqs)
+    ]
+    side_raw = np.sum(side_components, axis=0) / max(len(side_components), 1)
+    modulation = 1.0 + mod_depth * np.sin(2 * np.pi * mod_freq_hz * t + mod_phase)
+    side = side_raw * modulation
+    side = _band_limit(
+        data=side,
+        sample_rate=sample_rate,
+        lowcut=side_min * 0.9,
+        highcut=min(freqs[-1] * 1.3, nyquist * 0.95),
+    )
+    side = _scale_to_dbfs(side, -6.0, mode="peak")
+
+    left = 0.5 * (mid + side)
+    right = 0.5 * (mid - side)
+    stereo = np.column_stack([left, right])
+    stereo = _scale_to_dbfs(stereo, -3.0, mode="peak")
+
+    descriptor = f"side{int(side_min)}hz"
+    extra_meta: dict[str, object] = {
+        "mid_band_lowcut_hz": 80.0,
+        "mid_band_highcut_hz": 3200.0,
+        "side_tones_hz": [float(f) for f in freqs],
+        "side_mod_freq_hz": mod_freq_hz,
+        "side_mod_depth": mod_depth,
+        "side_target_peak_dbfs": -6.0,
+        "target_peak_dbfs": -3.0,
+    }
+    return stereo, extra_meta, descriptor
 
 
 def _generate_am_attack(
@@ -542,13 +768,14 @@ def _build_metadata(
     signal_type: str,
     common: CommonSignalConfig,
     duration_sec: float,
+    channels: int,
     extra: dict[str, object],
 ) -> dict[str, object]:
     return {
         "signal_type": signal_type.replace("-", "_"),
         "sample_rate": common.sample_rate,
         "bit_depth": common.normalized_bit_depth(),
-        "channels": 1,
+        "channels": channels,
         "duration_sec": duration_sec,
         "pilot_tone_freq_hz": common.pilot_freq,
         "pilot_duration_ms": common.pilot_duration_ms,

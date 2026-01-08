@@ -4,18 +4,18 @@
 
 ## 前提
 - WAV はステレオ(2ch)推奨・48 kHz / 24-bit（または 32f）。参照(ref)とDUTのサンプルレートを揃える。
-- パイロット入りテスト信号の仕様は `docs/signal-specifications.md` を参照。
+- パイロット入りテスト信号の仕様は `docs/jp/signal-specifications.md` を参照。
 
 ## generate — テスト信号生成
 ```
 uv run microstructure-metrics generate <signal_type> [options]
 ```
-- `signal_type`: thd / notched-noise / pink-noise / modulated / tfs-tones / tone-burst / am-attack / click
+- `signal_type`: thd / notched-noise / pink-noise / modulated / tfs-tones / tone-burst / am-attack / click / complex-bass / binaural-cues / ms-side-texture
 - 主なオプション:
   - `--sample-rate,-sr` (int, default 48000)
   - `--bit-depth,-bd` ("24bit" or "32f")
   - `--duration,-d` (sec, default 10.0) テスト本体長
-  - 出力チャンネル: **常にステレオ(2ch)**（生成信号をL/Rに複製）
+  - 出力チャンネル: **常にステレオ(2ch)**（モノラル信号はL/R複製、binaural系は左右で差分あり）
   - パイロット/無音: `--pilot-freq` `--pilot-duration` `--silence-duration`
   - THD: `--freq` `--level-dbfs`
   - MPS: `--carrier` `--am-freq` `--am-depth` `--fm-dev` `--fm-freq`
@@ -23,10 +23,17 @@ uv run microstructure-metrics generate <signal_type> [options]
   - tone-burst: `--burst-freq` `--burst-cycles` `--burst-level-dbfs` `--burst-fade-cycles`
   - am-attack: `--carrier` `--attack-ms` `--release-ms` `--gate-period-ms`
   - click: `--click-level-dbfs` `--click-band-limit-hz`
+  - binaural-cues: `--itd-ms` (右ch遅延) `--ild-db` (右-左レベル差)
+  - ms-side-texture: `--min-freq` `--tone-count` `--tone-step` でSide帯域を調整
   - 出力: `--output,-o` (WAV path), `--with-metadata` (JSONも出力)
 - 例: ノッチノイズ + メタデータ
 ```
 uv run microstructure-metrics generate notched-noise --with-metadata
+```
+
+- 例: **binaural-cues**（ITD/ILD入りのステレオノイズ）
+```
+uv run microstructure-metrics generate binaural-cues --itd-ms 0.35 --ild-db 6 --with-metadata
 ```
 
 - 例: **Qスイープ**（複数Qの一括生成。`--output` はディレクトリを指定）

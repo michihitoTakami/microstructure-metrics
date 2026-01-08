@@ -48,6 +48,20 @@ def _body_segment(
     return data[start:end, 0]
 
 
+def _stereo_body_segment(
+    data: npt.NDArray[np.float64],
+    *,
+    sample_rate: int,
+    pilot_ms: int,
+    silence_ms: int,
+) -> npt.NDArray[np.float64]:
+    silence_samples = int(sample_rate * silence_ms / 1000)
+    pilot_samples = int(sample_rate * pilot_ms / 1000)
+    start = silence_samples + pilot_samples
+    end = data.shape[0] - (silence_samples + pilot_samples)
+    return data[start:end]
+
+
 def test_generate_thd_creates_wav_and_json(tmp_path: Path) -> None:
     runner = CliRunner()
     wav_path = tmp_path / "thd.wav"
@@ -182,6 +196,15 @@ def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
             "click",
             {"--click-level-dbfs": "-6", "--click-band-limit-hz": "20000"},
         ),
+        ("complex-bass", {}),
+        (
+            "binaural-cues",
+            {"--itd-ms": "0.35", "--ild-db": "6"},
+        ),
+        (
+            "ms-side-texture",
+            {"--min-freq": "5000", "--tone-count": "4", "--tone-step": "1500"},
+        ),
     ],
 )
 def test_generate_other_signals_structure_and_pilot(tmp_path: Path, signal_type, opts):
@@ -271,6 +294,46 @@ def test_generate_transient_signals_metadata_keys(
     payload = meta_path.read_text()
     for key in expected_keys:
         assert f'"{key}"' in payload
+
+
+@pytest.mark.parametrize(
+    "signal_type,opts,expected_keys",
+    [
+        ("complex-bass", {}, ["bass_components_hz", "band_highcut_hz"]),
+        (
+            "binaural-cues",
+            {"--itd-ms": "0.5", "--ild-db": "4"},
+            ["itd_ms", "ild_db"],
+        ),
+        (
+            "ms-side-texture",
+            {"--min-freq": "5200", "--tone-count": "3"},
+            ["side_tones_hz", "mid_band_highcut_hz"],
+        ),
+    ],
+)
+def test_generate_new_signals_metadata(
+    tmp_path: Path, signal_type: str, opts: dict[str, str], expected_keys: list[str]
+) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / f"{signal_type}.wav"
+    args = [
+        "generate",
+        signal_type,
+        "--duration",
+        "0.25",
+        "--output",
+        str(wav_path),
+        "--with-metadata",
+    ]
+    for k, v in opts.items():
+        args.extend([k, v])
+    result = runner.invoke(main, args)
+    assert result.exit_code == 0, result.output
+    payload = wav_path.with_suffix(".json").read_text()
+    for key in expected_keys:
+        assert f'"{key}"' in payload
+    assert '"channels": 2' in payload
 
 
 def test_pilot_frequency_and_level(tmp_path: Path) -> None:
@@ -462,6 +525,114 @@ def test_modulated_has_am_depth(tmp_path: Path) -> None:
     env_min = env.min()
     depth = (env_max - env_min) / (env_max + env_min + 1e-12)
     assert 0.35 <= depth <= 0.65  # target depth 0.5 with tolerance
+
+
+def test_complex_bass_energy_focus(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_default_rng = np.random.default_rng
+    monkeypatch.setattr(
+        np.random, "default_rng", lambda *_, **__: original_default_rng(2)
+    )
+    runner = CliRunner()
+    wav_path = tmp_path / "complex_bass.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "complex-bass",
+            "--duration",
+            "0.6",
+            "--output",
+            str(wav_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data, sr = sf.read(wav_path, always_2d=True)
+    body = _body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
+    freqs, psd = signal.welch(body, sr, nperseg=4096, scaling="spectrum")
+    low_mask = freqs <= 300
+    high_mask = freqs >= 600
+    low_power = float(np.sum(psd[low_mask]))
+    high_power = float(np.sum(psd[high_mask]))
+    assert low_power > 6 * high_power
+
+
+def test_binaural_cues_itd_and_ild(tmp_path: Path) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / "binaural.wav"
+    itd_ms = 0.4
+    ild_db = 4.0
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "binaural-cues",
+            "--duration",
+            "0.4",
+            "--itd-ms",
+            str(itd_ms),
+            "--ild-db",
+            str(ild_db),
+            "--output",
+            str(wav_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data, sr = sf.read(wav_path, always_2d=True)
+    body = _stereo_body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
+    left = body[:, 0]
+    right = body[:, 1]
+    rms_left = float(np.sqrt(np.mean(np.square(left))))
+    rms_right = float(np.sqrt(np.mean(np.square(right))))
+    delta_db = 20 * np.log10(max(rms_left, 1e-12) / max(rms_right, 1e-12))
+    assert abs(delta_db - ild_db) < 1.2
+
+    corr = signal.correlate(right, left, mode="full")
+    lags = signal.correlation_lags(right.size, left.size, mode="full")
+    lag_at_max = lags[int(np.argmax(corr))]
+    delay_ms = abs(lag_at_max) * 1000 / sr
+    assert abs(delay_ms - abs(itd_ms)) < 0.25
+
+
+def test_ms_side_texture_side_energy_high_band(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_default_rng = np.random.default_rng
+    monkeypatch.setattr(
+        np.random, "default_rng", lambda *_, **__: original_default_rng(3)
+    )
+    runner = CliRunner()
+    wav_path = tmp_path / "ms_side.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "ms-side-texture",
+            "--duration",
+            "0.4",
+            "--min-freq",
+            "5500",
+            "--tone-count",
+            "4",
+            "--tone-step",
+            "1400",
+            "--output",
+            str(wav_path),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data, sr = sf.read(wav_path, always_2d=True)
+    body = _stereo_body_segment(data, sample_rate=sr, pilot_ms=100, silence_ms=500)
+    mid = 0.5 * (body[:, 0] + body[:, 1])
+    side = 0.5 * (body[:, 0] - body[:, 1])
+    freqs, psd_mid = signal.welch(mid, sr, nperseg=4096, scaling="spectrum")
+    _, psd_side = signal.welch(side, sr, nperseg=4096, scaling="spectrum")
+    high_mask = freqs >= 5000
+    side_high = float(np.sum(psd_side[high_mask]))
+    mid_high = float(np.sum(psd_mid[high_mask]))
+    assert side_high > mid_high * 1.5
+    assert side_high > 1e-9
 
 
 def test_tfs_tones_peak_frequencies(tmp_path: Path) -> None:
