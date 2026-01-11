@@ -13,6 +13,7 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Edge rounding / transient smearing → Transient metrics (needs impulse/edge stimulus).
 - Bass waveform fidelity → LFCR.
 - Spatial cue stability (stereo) → BCP.
+- Distribution-distance comparisons → MDI.
 - Residual “structure” vs noise → RMI.
 - Always use the intended stimulus from `docs/*/signal-specifications.md`; wrong signals make metrics meaningless.
 
@@ -58,6 +59,11 @@ Purpose: explain how to read the metrics produced by `report` (JSON/CSV/Markdown
 - Burstiness: `burstiness.kurtosis`, `burstiness.crest_factor`, `burstiness.p99_abs` (higher → more impulsive/structured).
 - Whiteness: `whiteness.spectral_flatness` (closer to 1 → flatter), `whiteness.autocorr_peak_excess` (closer to 0 → more white), `whiteness.autocorr_peak_lag_ms`.
 - Modulation structure: `modulation.high_mod_ratio_4_64`, `modulation.high_mod_ratio_10_64` (higher → more high-rate envelope modulation in residual).
+
+### Microstructure Distribution Divergence (MDI)
+- What: compares short-time feature distributions from TFS, Transient (and, when available, BCP) using 1D Wasserstein distances so that “mostly OK but sometimes broken” behavior is highlighted.
+- Where in JSON: `metrics.divergence`. See `mdi_total`, `channels_total`/`binaural_total`, `component_totals`, and the list of `components` describing per-feature contributions (e.g., `ch0.tfs.correlation_to_ideal`, `ch0.transient.attack_time_ms`, `binaural.ild_db`).
+- Heuristic: lower `mdi_total` signals more similar distributions. Component breakdowns show which feature (e.g., TFS correlation → 1.0, band delay → 0 ms, transient attack/width, binaural ITD/ILD/IACC) is drifting; even if averages look fine, a large component indicates sporadic glitched frames or localized degradation.
 
 ## Reading examples
 - “MPS corr 0.75, TFS corr 0.8”: both texture and high-band phase are degraded—could be heavy feedback or bandwidth limits.
