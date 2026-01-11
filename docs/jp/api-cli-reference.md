@@ -73,6 +73,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
 - 主なオプション:
   - 入力処理: `--allow-resample` `--target-sample-rate` `--channels`
     - `--channels`: `stereo|mid|side|ch0|ch1` を選択。I/Oは常に2chへ正規化され、mid/sideは2chへ写像、ch0/ch1は指定chを複製して解析する。
+      - BCP/MDI はステレオ入力を前提とするため、`stereo`/`mid`/`side` を使うと全データが活用される（`ch0`/`ch1` では BCP/MDI が利用不可）。
   - アライメント: `--align/--no-align` `--pilot-freq` `--pilot-threshold`
     `--pilot-band-width-hz` `--pilot-duration-ms` `--min-duration-ms`
     `--margin-ms` `--max-lag-ms`
@@ -86,6 +87,7 @@ uv run microstructure-metrics report ref.wav dut.wav [options]
   - LFCR出力項目: `cycle_shape_corr_mean` / `cycle_shape_corr_p05` / `harmonic_phase_coherence` / `envelope_diff_outlier_rate` / 帯域別 `band_metrics.*`
   - RMI(residual)出力項目: `burstiness.kurtosis` / `burstiness.crest_factor` / `burstiness.p99_abs` / `whiteness.spectral_flatness` / `whiteness.autocorr_peak_excess` / `modulation.high_mod_ratio_4_64` など
     - JSON上の参照例: `metrics.ch0.residual.whiteness.spectral_flatness`
+  - MDI（Microstructure Distribution Divergence）: `metrics.divergence` に `mdi_total`/`channels_total`/`binaural_total`/`component_totals`/`components` が入り、TFS/Transient（＋ステレオで BCP）を分布で比較した 1D Wasserstein 距離を重み付き合算した値。小さいほど「局所的な崩れが少ない」。
 - 例: JSON と Markdown を保存
 ```
 uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \

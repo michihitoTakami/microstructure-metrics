@@ -1,7 +1,7 @@
 # 指標の読み解きガイド
 
-## 目的
-- 本ツールが出力する指標（THD+N, MPS, TFS, Transient, LFCR, BCP, RMI）の意味と読み方を整理し、機器比較や異常検出に活用する。
+-## 目的
+- 本ツールが出力する指標（THD+N, MPS, TFS, Transient, LFCR, BCP, RMI, MDI）の意味と読み方を整理し、機器比較や異常検出に活用する。
 - 出力は `report` サブコマンドの JSON/CSV/Markdown に含まれる値を前提とする。
 
 ## 共通の見方
@@ -14,6 +14,7 @@
 - 高域微細位相の安定性 → TFS。
 - エッジ丸まり・過渡スメア → Transient（インパルス/エッジ刺激が必須）。
 - 低域の複雑波形の復元 → LFCR（複雑ベース/キック+ベース等）。
+- 局所崩れ/分布距離 → MDI（短時間特徴量の分布を比較）。
 - 両耳手がかり（像の安定） → BCP（ステレオ必須）。
 - 差分が「ただのノイズ」か「時間構造を持つ誤差」か → RMI（残差の突発性/白色性/変調構造）。
 - `docs/*/signal-specifications.md` にある想定刺激で実行すること。異なる信号で実行すると値が無意味になる。
@@ -65,6 +66,11 @@
   - 目安: 構造化誤差（リンギング等）では自己相関ピークが出て `autocorr_peak_excess` が増える。白色ノイズ的な差分では `spectral_flatness` が高くなりやすい。
 - modulation（変調構造）: `modulation.high_mod_ratio_4_64`, `modulation.high_mod_ratio_10_64`
   - 目安: 残差包絡の高変調成分が増えると比率が上がる（“微細なゆらぎ/周期性の混入”のサインになりうる）。
+
+### Microstructure Distribution Divergence (MDI)
+- 内容: TFS/Transient（ステレオ時は BCP も）から得られる短時間特徴量の分布を 1D Wasserstein 距離で比較し、「全体は似ているが局所的に崩れる」パターンを検出する。平均では見えない散発的な悪化を拾うのが狙い。
+- 出力パス: `metrics.divergence`。`mdi_total`（総合）、`channels_total`/`binaural_total`（グループ別）に加え、`component_totals`/`components`（TFS correlation/to 1, band delay, transient attack/width, BCP ITD/ILD/IACC の分布距離）が入る。
+- 目安: `mdi_total` が小さいほど分布が類似。`k` 番目の分布が大きく `component_totals` へ寄与していれば、瞬間的な崩れの発生源（例: `ch0.tfs.correlation_to_ideal` や `binaural.ild_db`）を検証する。平均指標が良くても MDI が悪化していると、局所ノイズや時限的なリンギングが潜んでいる可能性。
 
 ## 典型的な読み解き例
 - 「MPS 相関 0.75, 距離大、TFS 相関 0.8」: テクスチャと位相微細構造がともに崩れており、フィードバックや帯域制限の影響が考えられる。

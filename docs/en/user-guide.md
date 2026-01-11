@@ -5,7 +5,8 @@ This guide is for end users who measure and compare DAC/AMP devices using the CL
 ## What you get
 - Pilot-tone-based alignment and drift estimation
 - Test signal generation (THD, pink-noise, AM/FM, TFS tones, transient clicks/bursts)
-- Metrics: THD+N, MPS, TFS, Transient, LFCR, BCP, RMI
+- Metrics: THD+N, MPS, TFS, Transient, LFCR, BCP, RMI, MDI
+- New stimuli such as `complex-bass`, `binaural-cues`, and `ms-side-texture` exercise LFCR/BCP/RMI/MDI.
 - Reports in JSON/CSV/Markdown, optional plots for MPS/TFS/BCP/LFCR/RMI
 
 ## Prerequisites
@@ -22,6 +23,7 @@ uv sync
 ## Typical workflow
 1) Generate or download the test signal
    - Example: `uv run microstructure-metrics generate notched-noise --with-metadata`
+   - Stereo stimuli: `generate complex-bass`, `binaural-cues`, or `ms-side-texture` to hit LFCR/BCP/RMI/MDI.
 2) Play and record the DUT path with bit-perfect playback (no EQ/AGC/SRC). Keep the file untrimmed.
 3) Align ref/dut using pilots
    - `uv run microstructure-metrics align ref.wav dut.wav`
@@ -35,6 +37,8 @@ uv sync
 - Align: `microstructure-metrics align ref.wav dut.wav [options]`
 - Drift: `microstructure-metrics drift ref.wav dut.wav [options]`
 - Report: `microstructure-metrics report ref.wav dut.wav [options]`
+  - `--channels stereo|mid|side` keeps BCP/MDI enabled (default `stereo`; `ch0`/`ch1` runs a single channel only).
+  - `--plot` now emits BCP ITD/ILD heatmaps, BCP IACC time series, LFCR cycle overlays, and RMI residual spectrograms.
 See `docs/api-cli-reference.md` for full option lists (Japanese).
 
 ## Recording tips
@@ -47,7 +51,7 @@ See `docs/api-cli-reference.md` for full option lists (Japanese).
 - Outputs:
   - Aligned WAVs: `*.aligned_ref.wav`, `*.aligned_dut.wav`
   - Drift report (optional JSON)
-  - Metrics report: JSON (default `metrics_report.json`), optional CSV/Markdown
+  - Metrics report: JSON (default `metrics_report.json`), optional CSV/Markdown; JSON now includes `metrics.divergence.mdi_total` representing the Microstructure Distribution Divergence.
   - Plots (when `--plot`): MPS delta heatmap, TFS correlation time-series, BCP ITD/ILD heatmaps, BCP IACC time-series, LFCR cycle shape overlay, RMI residual spectrogram
 
 ## Related docs
