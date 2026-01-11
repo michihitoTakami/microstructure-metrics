@@ -86,6 +86,14 @@ uv run pytest
 uv run pre-commit run --all-files
 ```
 
+### 可視化しやすいテストデータ（ローカル生成）
+
+WAV はリポジトリに含めませんが、可視化しやすい決定的(ref/dut)ペアを生成できます。
+
+```bash
+python tests/generate_test_data.py --profile visual --output-dir ./_visual_test_data
+```
+
 ## プロジェクト構成
 
 ```
