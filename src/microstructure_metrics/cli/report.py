@@ -38,7 +38,12 @@ from microstructure_metrics.metrics import (
     calculate_transient_metrics,
 )
 from microstructure_metrics.visualization import (
+    save_bass_cycle_shape_overlay,
+    save_binaural_iacc_timeseries,
+    save_binaural_ild_heatmap,
+    save_binaural_itd_heatmap,
     save_mps_delta_heatmap,
+    save_residual_spectrogram,
     save_tfs_correlation_timeseries,
 )
 
@@ -83,7 +88,7 @@ MultiChannelMetricsPayload = dict[str, MetricsPayload]
     "--plot",
     is_flag=True,
     default=False,
-    help="MPS/TFSの可視化画像を出力する",
+    help="MPS/TFS/BCP/LFCR/RMIの可視化画像を出力する",
 )
 @click.option(
     "--plot-dir",
@@ -494,10 +499,18 @@ def report(
             else json_path.parent / f"{json_path.stem}_plots"
         )
         plot_payload = {"plot_dir": str(resolved_plot_dir.resolve())}
-        for name, metric in metrics_by_channel.items():
+        for idx, (name, metric) in enumerate(metrics_by_channel.items()):
             plot_payload[name] = _generate_plots(
                 metrics=metric,
+                reference=aligned_ref[:, idx],
+                dut=aligned_dut[:, idx],
+                sample_rate=sample_rate,
                 plot_dir=resolved_plot_dir / name,
+            )
+        if binaural_result is not None:
+            plot_payload["binaural"] = _generate_binaural_plots(
+                result=binaural_result,
+                plot_dir=resolved_plot_dir / "binaural",
             )
         click.echo(f"プロットを書き出しました: {resolved_plot_dir}")
 
@@ -638,7 +651,14 @@ def _metrics_to_payload(metrics: CalculatedMetrics) -> MetricsPayload:
     }
 
 
-def _generate_plots(*, metrics: CalculatedMetrics, plot_dir: Path) -> dict[str, str]:
+def _generate_plots(
+    *,
+    metrics: CalculatedMetrics,
+    reference: Any,
+    dut: Any,
+    sample_rate: int,
+    plot_dir: Path,
+) -> dict[str, str]:
     plot_dir.mkdir(parents=True, exist_ok=True)
     mps_path = save_mps_delta_heatmap(
         result=metrics.mps, path=plot_dir / "mps_delta_heatmap.png"
@@ -646,10 +666,49 @@ def _generate_plots(*, metrics: CalculatedMetrics, plot_dir: Path) -> dict[str, 
     tfs_path = save_tfs_correlation_timeseries(
         result=metrics.tfs, path=plot_dir / "tfs_correlation_timeseries.png"
     )
+    bass_path = save_bass_cycle_shape_overlay(
+        reference=reference,
+        dut=dut,
+        sample_rate=sample_rate,
+        result=metrics.bass,
+        path=plot_dir / "bass_cycle_shape_overlay.png",
+    )
+    residual_path = save_residual_spectrogram(
+        reference=reference,
+        dut=dut,
+        sample_rate=sample_rate,
+        result=metrics.residual,
+        path=plot_dir / "residual_spectrogram.png",
+    )
     return {
         "plot_dir": str(plot_dir.resolve()),
         "mps_delta_heatmap": str(mps_path.resolve()),
         "tfs_correlation_timeseries": str(tfs_path.resolve()),
+        "bass_cycle_shape_overlay": str(bass_path.resolve()),
+        "residual_spectrogram": str(residual_path.resolve()),
+    }
+
+
+def _generate_binaural_plots(
+    *,
+    result: BinauralResult,
+    plot_dir: Path,
+) -> dict[str, str]:
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    itd_path = save_binaural_itd_heatmap(
+        result=result, path=plot_dir / "binaural_itd_heatmap.png"
+    )
+    ild_path = save_binaural_ild_heatmap(
+        result=result, path=plot_dir / "binaural_ild_heatmap.png"
+    )
+    iacc_path = save_binaural_iacc_timeseries(
+        result=result, path=plot_dir / "binaural_iacc_timeseries.png"
+    )
+    return {
+        "plot_dir": str(plot_dir.resolve()),
+        "binaural_itd_heatmap": str(itd_path.resolve()),
+        "binaural_ild_heatmap": str(ild_path.resolve()),
+        "binaural_iacc_timeseries": str(iacc_path.resolve()),
     }
 
 
@@ -982,6 +1041,11 @@ def _render_plot_section(plots: Mapping[str, object], base_dir: Path) -> list[st
     targets = [
         ("MPS Delta Heatmap", "mps_delta_heatmap"),
         ("TFS Correlation", "tfs_correlation_timeseries"),
+        ("BCP ITD Heatmap", "binaural_itd_heatmap"),
+        ("BCP ILD Heatmap", "binaural_ild_heatmap"),
+        ("BCP IACC Timeseries", "binaural_iacc_timeseries"),
+        ("LFCR Cycle Shape Overlay", "bass_cycle_shape_overlay"),
+        ("RMI Residual Spectrogram", "residual_spectrogram"),
     ]
 
     for title, key in targets:

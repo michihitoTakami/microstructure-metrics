@@ -115,6 +115,12 @@ def test_cli_report_outputs_json_csv_md(tmp_path: Path) -> None:
     assert "ch0" in plots
     assert Path(plots["ch0"]["mps_delta_heatmap"]).exists()
     assert Path(plots["ch0"]["tfs_correlation_timeseries"]).exists()
+    assert Path(plots["ch0"]["bass_cycle_shape_overlay"]).exists()
+    assert Path(plots["ch0"]["residual_spectrogram"]).exists()
+    assert "binaural" in plots
+    assert Path(plots["binaural"]["binaural_itd_heatmap"]).exists()
+    assert Path(plots["binaural"]["binaural_ild_heatmap"]).exists()
+    assert Path(plots["binaural"]["binaural_iacc_timeseries"]).exists()
     assert plot_dir.exists()
 
     assert csv_path.exists()

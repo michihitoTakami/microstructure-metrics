@@ -6,7 +6,7 @@ This guide is for end users who measure and compare DAC/AMP devices using the CL
 - Pilot-tone-based alignment and drift estimation
 - Test signal generation (THD, pink-noise, AM/FM, TFS tones, transient clicks/bursts)
 - Metrics: THD+N, MPS, TFS, Transient, LFCR, BCP, RMI
-- Reports in JSON/CSV/Markdown, optional plots for MPS/TFS
+- Reports in JSON/CSV/Markdown, optional plots for MPS/TFS/BCP/LFCR/RMI
 
 ## Prerequisites
 - Python 3.13+, [uv](https://github.com/astral-sh/uv)
@@ -48,7 +48,7 @@ See `docs/api-cli-reference.md` for full option lists (Japanese).
   - Aligned WAVs: `*.aligned_ref.wav`, `*.aligned_dut.wav`
   - Drift report (optional JSON)
   - Metrics report: JSON (default `metrics_report.json`), optional CSV/Markdown
-  - Plots (when `--plot`): MPS delta heatmap, TFS correlation time-series
+  - Plots (when `--plot`): MPS delta heatmap, TFS correlation time-series, BCP ITD/ILD heatmaps, BCP IACC time-series, LFCR cycle shape overlay, RMI residual spectrogram
 
 ## Related docs
 - Japanese overview: `README_JP.md`
