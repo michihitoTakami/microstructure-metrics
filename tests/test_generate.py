@@ -160,6 +160,30 @@ def test_generate_tfs_tones_defaults(tmp_path: Path) -> None:
     assert data.shape[1] == 2
 
 
+def test_generate_supports_high_sample_rate(tmp_path: Path) -> None:
+    runner = CliRunner()
+    wav_path = tmp_path / "thd_768000.wav"
+    result = runner.invoke(
+        main,
+        [
+            "generate",
+            "thd",
+            "--duration",
+            "0.05",
+            "--sample-rate",
+            "768000",
+            "--output",
+            str(wav_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data, sample_rate = sf.read(wav_path, always_2d=True)
+    assert sample_rate == 768000
+    assert data.ndim == 2
+    assert data.shape[0] > 0
+
+
 @pytest.mark.parametrize(
     "signal_type,opts",
     [

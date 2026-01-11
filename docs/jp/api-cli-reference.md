@@ -12,7 +12,8 @@ uv run microstructure-metrics generate <signal_type> [options]
 ```
 - `signal_type`: thd / notched-noise / pink-noise / modulated / tfs-tones / tone-burst / am-attack / click / complex-bass / binaural-cues / ms-side-texture
 - 主なオプション:
-  - `--sample-rate,-sr` (int, default 48000)
+  - `--sample-rate,-sr` (int, default 48000, 8k〜768kHz)
+    - 44.1k/48k 系の16x（705.6 / 768 kHz）出力に対応
   - `--bit-depth,-bd` ("24bit" or "32f")
   - `--duration,-d` (sec, default 10.0) テスト本体長
   - 出力チャンネル: **常にステレオ(2ch)**（モノラル信号はL/R複製、binaural系は左右で差分あり）

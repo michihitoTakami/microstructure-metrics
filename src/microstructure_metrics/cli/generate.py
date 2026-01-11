@@ -41,9 +41,9 @@ def _parse_float_list(text: str) -> list[float]:
     "--sample-rate",
     "-sr",
     default=48000,
-    type=click.IntRange(8000, 384000),
+    type=click.IntRange(8000, 768000),
     show_default=True,
-    help="サンプルレート (Hz)",
+    help="サンプルレート (Hz, 8k〜768k、705.6/768k 対応)",
 )
 @click.option(
     "--bit-depth",
