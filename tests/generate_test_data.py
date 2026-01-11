@@ -39,6 +39,7 @@ def _visualization_pairs(
     """可視化用に差分が分かりやすいテストペアを返す（WAVはgit管理しない想定）。"""
     common = CommonSignalConfig(sample_rate=sample_rate, duration=2.0)
     rng_seed = 0
+    fixed_created_at = "2000-01-01T00:00:00+00:00"
 
     cases: list[
         tuple[
@@ -74,8 +75,8 @@ def _visualization_pairs(
             dut.data,
             common.sample_rate,
             "binaural_cues_itd0.2ms_ild0_to_itd0.6ms_ild6",
-            ref.metadata,
-            dut.metadata,
+            {**ref.metadata, "created_at": fixed_created_at},
+            {**dut.metadata, "created_at": fixed_created_at},
         )
     )
 
@@ -104,8 +105,12 @@ def _visualization_pairs(
             dut_ms,
             common.sample_rate,
             "ms_side_texture_side_gain",
-            ref_ms.metadata,
-            {**ref_ms.metadata, "side_gain": float(side_gain)},
+            {**ref_ms.metadata, "created_at": fixed_created_at},
+            {
+                **ref_ms.metadata,
+                "created_at": fixed_created_at,
+                "side_gain": float(side_gain),
+            },
         )
     )
 

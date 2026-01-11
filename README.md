@@ -92,6 +92,15 @@ uv run pytest
 uv run pre-commit run --all-files
 ```
 
+### Visual-friendly test data (local)
+
+This repo does not commit WAV files, but you can generate deterministic ref/dut pairs for
+easy visualization:
+
+```bash
+python tests/generate_test_data.py --profile visual --output-dir ./_visual_test_data
+```
+
 ## Project layout
 
 ```
