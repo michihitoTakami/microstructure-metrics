@@ -63,7 +63,7 @@ $$\text{env}_i(n) = |x_i(n)|$$
 オプション：DC成分除去
 $$\tilde{\text{env}}_i(n) = \text{env}_i(n) - \frac{1}{N}\sum_{k=0}^{N-1} \text{env}_i(k)$$
 
-オプション：低域カットフィルタ（バターワース、4次）
+オプション：ローパスフィルタ（バターワース、4次）
 $$\hat{\text{env}}_i(n) = \text{LPF}(\tilde{\text{env}}_i(n), f_c)$$
 
 ここで \(f_c\) は通常64 Hz（速い過渡を除去しながら音楽性を保持）。
