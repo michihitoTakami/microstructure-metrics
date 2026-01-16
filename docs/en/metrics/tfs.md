@@ -207,78 +207,18 @@ Large \(\sigma_{\tau}\) (e.g., > 0.2 ms) suggests frequency-dependent delay anom
 | `envelope_threshold_db` | float | -40.0 | Exclude frames below this dB level (relative to peak envelope); prevents noise-dominated correlation |
 | `window` | str | "hann" | Window function for STCC; Hann provides good spectral leakage vs main-lobe width trade-off |
 
-### 3.2 Pseudo Code
+### 3.2 Algorithm Overview
 
-```
-function calculate_tfs_correlation(reference, dut, sample_rate, params):
-  // Initialization
-  nyquist = sample_rate / 2
-  frame_length_samples = round(params.frame_length_ms * sample_rate / 1000)
-  hop_samples = round(params.frame_hop_ms * sample_rate / 1000)
-  max_lag_samples = round(params.max_lag_ms * sample_rate / 1000)
-  window = hann(frame_length_samples)
-  frame_starts = range(0, len(reference) - frame_length_samples + 1, hop_samples)
+The TFS correlation algorithm follows these steps:
 
-  // Per-band processing
-  for each (low, high) in freq_bands:
-    // Extract band
-    ref_band = bandpass_filter(reference, low, high, order=params.filter_order)
-    dut_band = bandpass_filter(dut, low, high, order=params.filter_order)
+1. **Band decomposition**: Apply Butterworth bandpass filters to extract each frequency band
+2. **TFS extraction**: For each band, compute analytic signal via Hilbert transform, then separate envelope \(A(t)\) and fine structure \(\text{TFS}(t) = \text{Re}[z(t)] / A(t)\)
+3. **Short-time correlation**: Divide signal into overlapping frames, apply Hann window, compute normalized cross-correlation with lag search \(\rho(\tau)\), and weight by envelope energy
+4. **Band aggregation**: Compute weighted mean correlation and weighted median group delay per band
+5. **Phase coherence**: After lag compensation, compute circular mean of phase differences \(\Delta\phi(t)\) across all bands
+6. **Global statistics**: Aggregate correlations (mean, 5th percentile, variance), group delay standard deviation
 
-    // Hilbert transform
-    ref_analytic = hilbert(ref_band)
-    dut_analytic = hilbert(dut_band)
-
-    // Envelope and fine structure
-    ref_envelope = abs(ref_analytic)
-    dut_envelope = abs(dut_analytic)
-    ref_fine = real(ref_analytic) / max(ref_envelope, EPS)
-    dut_fine = real(dut_analytic) / max(dut_envelope, EPS)
-
-    // Envelope threshold
-    peak_envelope = max(max(ref_envelope), max(dut_envelope))
-    threshold = peak_envelope * 10^(params.envelope_threshold_db / 20)
-
-    // Short-time correlation
-    for each frame_start in frame_starts:
-      frame_end = frame_start + frame_length_samples
-      envelope_mean = mean((ref_envelope[frame_start:frame_end] + dut_envelope[frame_start:frame_end]) / 2)
-      if envelope_mean <= threshold:
-        continue  // Skip low-energy frame
-
-      ref_frame = ref_fine[frame_start:frame_end] * window
-      dut_frame = dut_fine[frame_start:frame_end] * window
-
-      // Normalized cross-correlation with lag search
-      correlation, lag = max_normalized_xcorr(ref_frame, dut_frame, max_lag_samples)
-
-      // Store correlation, lag, and weight
-      correlations.append(correlation)
-      lags.append(lag)
-      weights.append(envelope_mean)
-
-    // Per-band aggregation
-    band_correlation[band] = weighted_mean(correlations, weights)
-    band_group_delay[band] = weighted_median(lags, weights) * 1000 / sample_rate  // Convert to ms
-
-    // Phase coherence (after lag compensation)
-    ref_phase = unwrap(angle(ref_analytic))
-    dut_phase = unwrap(angle(dut_analytic))
-    lag_samples = weighted_median(lags, weights)
-    ref_phase_aligned, dut_phase_aligned = overlap_with_lag(ref_phase, dut_phase, lag_samples)
-    phase_diff = wrap(ref_phase_aligned - dut_phase_aligned)  // Wrap to [-pi, pi]
-    phase_vector_sum += sum(exp(1j * phase_diff))
-    phase_count += length(phase_diff)
-
-  // Global aggregation
-  mean_correlation = weighted_mean(all_correlations, all_weights)
-  percentile_05_correlation = percentile(all_correlations, 5)
-  correlation_variance = weighted_variance(all_correlations, all_weights)
-  phase_coherence = abs(phase_vector_sum) / phase_count
-  group_delay_std_ms = std(band_group_delay values)
-
-  return result
-```
+Implementation details are available in `src/microstructure_metrics/metrics/tfs.py`.
 
 ### 3.3 Edge Cases and Special Handling
 
@@ -371,146 +311,34 @@ $$
 ### 4.4 Interpretation Tips
 
 **Scenario: Mean correlation 0.88, phase coherence 0.92, group delay std 0.15 ms**
-- **Interpretation**: Good overall TFS preservation with minor phase instability and moderate group delay variation. Likely a well-designed minimum-phase filter with slight ripple.
-- **Action**: Compare with subjective listening; if no audible artifacts, acceptable. If harsh or unclear, investigate filter design.
+- Good overall TFS preservation with minor phase instability. Likely a well-designed filter with slight ripple. Compare with subjective listening to assess audibility.
 
 **Scenario: Mean correlation 0.75, percentile_05 0.60, variance 0.06**
-- **Interpretation**: Significant TFS degradation with intermittent breakdowns and high temporal variability. Suspect jitter, nonlinear distortion, or severe bandwidth limiting.
-- **Action**: Check signal path for jitter sources, verify DAC clock quality, and inspect band_correlations to locate frequency regions of concern.
+- Significant TFS degradation with intermittent breakdowns. Suspect jitter, nonlinear distortion, or severe bandwidth limiting. Inspect band_correlations to locate frequency regions of concern.
 
-**Scenario: Band correlations [0.92, 0.90, 0.88, 0.70] (2–3, 3–4, 4–6, 6–8 kHz), phase coherence 0.89**
-- **Interpretation**: HF band (6–8 kHz) exhibits severe TFS loss while lower bands are well preserved. Phase coherence is moderately affected.
-- **Action**: Suspect HF-specific issue: slew-rate limiting, reconstruction filter roll-off, or jitter concentrated at high frequencies. Verify amplifier or DAC specifications.
-
-**Scenario: All correlations ≥ 0.95, phase coherence 0.98, group delay std 0.05 ms**
-- **Interpretation**: Excellent TFS preservation; minimal phase distortion and flat group delay. Device maintains fine structure integrity.
-- **Action**: Reference-quality performance; no further investigation needed.
+**Scenario: Band correlations [0.92, 0.90, 0.88, 0.70] for 2–3, 3–4, 4–6, 6–8 kHz**
+- HF band exhibits severe TFS loss while lower bands are preserved. Suspect slew-rate limiting, reconstruction filter roll-off, or jitter concentrated at high frequencies.
 
 ---
 
-## 5. What TFS Reveals with Sample Signals
+## 5. Recommended Test Signals
 
-### 5.1 Using Test Signals from `generate.py`
+TFS metrics are most effective with signals containing high-frequency content (2–8 kHz) and clear phase structure. Suitable test signals include:
 
-The repository includes several test signal types (see `src/microstructure_metrics/cli/generate.py`) that are useful for understanding TFS:
+### 5.1 Signal Types and Expected Behavior
 
-#### A. **Multi-Tone** (`multitone`)
+| Signal Type | Ideal Correlation | What TFS Reveals |
+|-------------|-------------------|------------------|
+| **Multi-tone** (`multitone`) | > 0.95 | Harmonic phase relationships, intermodulation, group delay variation between frequency components |
+| **Tone Burst** (`tone-burst`) | > 0.92 | Filter ringing (pre/post), phase nonlinearity from non-minimum-phase filters, slew-rate limiting |
+| **Swept Sine** (`sweep`) | > 0.90 | Frequency-dependent distortion, group delay anomalies, nonlinear artifacts across the spectrum |
+| **AM-Modulated Tone** (`modulated`) | > 0.92 | Clock jitter, envelope-carrier coupling, intermodulation distortion |
 
-**Generator Parameters**:
-- Multiple sine tones at different frequencies (e.g., 1 kHz, 2 kHz, 4 kHz, 8 kHz)
-- Equal or weighted amplitudes
+### 5.2 Usage Notes
 
-**What TFS reveals**:
-- **Harmonic phase relationships**: TFS correlation drops if relative phase between tones is distorted
-- **Intermodulation**: Nonlinear devices introduce IM products that disrupt fine structure
-- **Group delay variation**: If different frequency components are delayed differently, phase coherence drops
-
-**Expected TFS correlation for undistorted signal**: **> 0.95**
-
----
-
-#### B. **Tone Burst** (`tone-burst`)
-
-**Generator Parameters** (defaults):
-- 8 kHz sine, 10 cycles, ±2 ms Hann fade
-- Creates sharp transient start/stop
-
-**What TFS reveals**:
-- **Filter ringing**: Pre-ringing or post-ringing from sharp filters shows up as phase distortion
-- **Phase nonlinearity**: Non-minimum-phase filters cause TFS correlation to drop during transient edges
-- **Slew-rate limiting**: Rapid oscillations are blurred → lower TFS correlation
-
-**Example**:
-- Reference (`tone-burst` defaults): TFS correlation > 0.93
-- DUT with minimum-phase filter (no pre-ring): TFS correlation ~0.90–0.92
-- DUT with linear-phase FIR (pre-ringing): TFS correlation ~0.80–0.85, phase coherence drops
-
----
-
-#### C. **Swept Sine** (`sweep`)
-
-**Generator Parameters**:
-- Frequency sweep from 20 Hz to 20 kHz over 10 seconds
-- Logarithmic or linear sweep
-
-**What TFS reveals**:
-- **Frequency-dependent distortion**: TFS band correlations reveal which frequency regions are affected
-- **Group delay anomalies**: Rapid phase changes during sweep cause TFS correlation to drop at specific frequencies
-- **Nonlinear distortion**: Harmonic generation disrupts fine structure, especially at low frequencies (subharmonics) and high frequencies (aliasing)
-
-**Example**:
-- Reference (`sweep` defaults): TFS correlation > 0.90 across all bands
-- DUT with group delay ripple: Band correlations vary (e.g., 0.92, 0.88, 0.85, 0.78 for 2–3, 3–4, 4–6, 6–8 kHz)
-- DUT with HF roll-off: High band (6–8 kHz) correlation drops to < 0.75
-
----
-
-#### D. **AM-Modulated Tone** (`modulated`)
-
-**Generator Parameters**:
-- Carrier: 4 kHz sine
-- AM modulation: 10 Hz, depth 0.5 (50%)
-
-**What TFS reveals**:
-- **Envelope-carrier separation**: TFS extracts carrier phase independently of envelope; AM distortion shows up as phase jitter
-- **Clock jitter**: Modulation sidebands are sensitive to timing errors → TFS correlation drops
-- **Intermodulation**: Nonlinear devices mix carrier and modulation, disrupting fine structure
-
-**Example**:
-- Reference (`modulated` defaults): TFS correlation > 0.92
-- DUT with clock jitter (±1 sample RMS): TFS correlation ~0.85–0.88, phase coherence ~0.90
-- DUT with IM distortion: TFS correlation < 0.80, band correlations show localized issues
-
----
-
-### 5.2 Comparison Matrix: What Correlations Imply
-
-| Signal Type | Ideal Correlation | Interpretation if < 0.85 |
-|-------------|-------------------|--------------------------|
-| `multitone` | > 0.95 | Phase distortion between tones, IM distortion, or group delay ripple |
-| `tone-burst` (transient) | > 0.92 | Filter ringing, phase nonlinearity, or slew-rate limiting |
-| `sweep` (broadband) | > 0.90 | Frequency-dependent distortion, group delay anomalies, or HF roll-off |
-| `modulated` (AM) | > 0.92 | Clock jitter, IM distortion, or envelope-carrier coupling |
-
-### 5.3 How to Generate and Analyze Examples
-
-1. **Generate reference signal** (ideal, high-quality output):
-   ```bash
-   python -m microstructure_metrics.cli generate multitone \
-     --duration 10 --sample-rate 48000 \
-     --frequencies 1000 2000 4000 8000 \
-     --output multitone_ref.wav
-   ```
-
-2. **Simulate a degraded version** (e.g., add jitter):
-   ```bash
-   # Example: resample to introduce slight jitter/aliasing
-   sox multitone_ref.wav -r 44100 dut_multitone.wav rate -v
-   sox dut_multitone.wav -r 48000 dut_multitone_resampled.wav rate -v
-   ```
-
-3. **Compute TFS and similarity**:
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.tfs import calculate_tfs_correlation
-   import soundfile as sf
-   ref, sr = sf.read('multitone_ref.wav')
-   dut, sr = sf.read('dut_multitone_resampled.wav')
-   result = calculate_tfs_correlation(
-       reference=ref, dut=dut, sample_rate=sr,
-       freq_bands=[(2000, 3000), (3000, 4000), (4000, 6000), (6000, 8000)]
-   )
-   print(f'TFS Mean Correlation: {result.mean_correlation:.3f}')
-   print(f'Phase Coherence: {result.phase_coherence:.3f}')
-   print(f'Group Delay Std: {result.group_delay_std_ms:.3f} ms')
-   print(f'Band correlations: {result.band_correlations}')
-   "
-   ```
-
-4. **Interpret results**:
-   - If mean correlation drops to 0.80: significant TFS degradation from resampling artifacts
-   - If phase coherence drops to 0.85: moderate phase jitter introduced
-   - If group delay std > 0.2 ms: frequency-dependent timing errors from resampler
+- Correlations below the ideal thresholds suggest phase distortion, jitter, or filter artifacts in the corresponding frequency range
+- Always inspect `band_correlations` to identify which frequency bands are affected
+- For detailed signal parameters and generation commands, see `docs/en/signal-specifications.md` and `docs/en/user-guide.md`
 
 ---
 

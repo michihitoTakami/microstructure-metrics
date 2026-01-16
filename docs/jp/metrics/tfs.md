@@ -207,78 +207,18 @@ $$
 | `envelope_threshold_db` | float | -40.0 | このdBレベル未満のフレームを除外（ピーク包絡に対する相対値）；ノイズ支配的な相関を防止 |
 | `window` | str | "hann" | STCCのウィンドウ関数；ハンはスペクトル漏れとメインローブ幅の良好なトレードオフを提供 |
 
-### 3.2 疑似コード
+### 3.2 アルゴリズム概要
 
-```
-function calculate_tfs_correlation(reference, dut, sample_rate, params):
-  // 初期化
-  nyquist = sample_rate / 2
-  frame_length_samples = round(params.frame_length_ms * sample_rate / 1000)
-  hop_samples = round(params.frame_hop_ms * sample_rate / 1000)
-  max_lag_samples = round(params.max_lag_ms * sample_rate / 1000)
-  window = hann(frame_length_samples)
-  frame_starts = range(0, len(reference) - frame_length_samples + 1, hop_samples)
+TFS相関アルゴリズムは以下のステップで構成されます：
 
-  // 帯域ごとの処理
-  for each (low, high) in freq_bands:
-    // 帯域抽出
-    ref_band = bandpass_filter(reference, low, high, order=params.filter_order)
-    dut_band = bandpass_filter(dut, low, high, order=params.filter_order)
+1. **帯域分解**：バターワースバンドパスフィルタを適用して各周波数帯域を抽出
+2. **TFS抽出**：各帯域について、ヒルベルト変換により解析信号を計算し、包絡 \(A(t)\) と微細構造 \(\text{TFS}(t) = \text{Re}[z(t)] / A(t)\) に分離
+3. **短時間相関**：信号を重複フレームに分割し、ハン窓を適用、ラグ探索付き正規化相互相関 \(\rho(\tau)\) を計算し、包絡エネルギーで重み付け
+4. **帯域集約**：帯域ごとに重み付き平均相関と重み付き中央値群遅延を計算
+5. **位相コヒーレンス**：ラグ補償後、全帯域にわたる位相差 \(\Delta\phi(t)\) の円周平均を計算
+6. **グローバル統計**：相関（平均、5パーセンタイル、分散）、群遅延標準偏差を集約
 
-    // ヒルベルト変換
-    ref_analytic = hilbert(ref_band)
-    dut_analytic = hilbert(dut_band)
-
-    // 包絡と微細構造
-    ref_envelope = abs(ref_analytic)
-    dut_envelope = abs(dut_analytic)
-    ref_fine = real(ref_analytic) / max(ref_envelope, EPS)
-    dut_fine = real(dut_analytic) / max(dut_envelope, EPS)
-
-    // 包絡閾値
-    peak_envelope = max(max(ref_envelope), max(dut_envelope))
-    threshold = peak_envelope * 10^(params.envelope_threshold_db / 20)
-
-    // 短時間相関
-    for each frame_start in frame_starts:
-      frame_end = frame_start + frame_length_samples
-      envelope_mean = mean((ref_envelope[frame_start:frame_end] + dut_envelope[frame_start:frame_end]) / 2)
-      if envelope_mean <= threshold:
-        continue  // 低エネルギーフレームをスキップ
-
-      ref_frame = ref_fine[frame_start:frame_end] * window
-      dut_frame = dut_fine[frame_start:frame_end] * window
-
-      // ラグ探索付き正規化相互相関
-      correlation, lag = max_normalized_xcorr(ref_frame, dut_frame, max_lag_samples)
-
-      // 相関、ラグ、重みを保存
-      correlations.append(correlation)
-      lags.append(lag)
-      weights.append(envelope_mean)
-
-    // 帯域ごとの集約
-    band_correlation[band] = weighted_mean(correlations, weights)
-    band_group_delay[band] = weighted_median(lags, weights) * 1000 / sample_rate  // ms に変換
-
-    // 位相コヒーレンス（ラグ補償後）
-    ref_phase = unwrap(angle(ref_analytic))
-    dut_phase = unwrap(angle(dut_analytic))
-    lag_samples = weighted_median(lags, weights)
-    ref_phase_aligned, dut_phase_aligned = overlap_with_lag(ref_phase, dut_phase, lag_samples)
-    phase_diff = wrap(ref_phase_aligned - dut_phase_aligned)  // [-pi, pi] にラップ
-    phase_vector_sum += sum(exp(1j * phase_diff))
-    phase_count += length(phase_diff)
-
-  // グローバル集約
-  mean_correlation = weighted_mean(all_correlations, all_weights)
-  percentile_05_correlation = percentile(all_correlations, 5)
-  correlation_variance = weighted_variance(all_correlations, all_weights)
-  phase_coherence = abs(phase_vector_sum) / phase_count
-  group_delay_std_ms = std(band_group_delay values)
-
-  return result
-```
+実装詳細は `src/microstructure_metrics/metrics/tfs.py` で確認できます。
 
 ### 3.3 エッジケースと特別な処理
 
@@ -371,146 +311,34 @@ $$
 ### 4.4 解釈のヒント
 
 **シナリオ：平均相関 0.88、位相コヒーレンス 0.92、群遅延標準偏差 0.15 ms**
-- **解釈**：軽微な位相不安定性と中程度の群遅延変動を伴う良好な全体TFS保存。軽いリップルを持つ良好に設計された最小位相フィルタの可能性。
-- **アクション**：主観的な聴取と比較；聴覚的アーティファクトがなければ許容可能。刺々しいまたは不明瞭であれば、フィルタ設計を調査。
+- 軽微な位相不安定性を伴う良好な全体TFS保存。軽いリップルを持つ良好に設計されたフィルタの可能性。主観的な聴取と比較して可聴性を評価。
 
 **シナリオ：平均相関 0.75、5パーセンタイル 0.60、分散 0.06**
-- **解釈**：断続的な崩壊と高い時間的変動を伴う有意なTFS劣化。ジッタ、非線形歪み、または深刻な帯域幅制限を疑う。
-- **アクション**：信号経路でジッタ源を確認、DACクロック品質を検証、band_correlationsを検査して懸念周波数領域を特定。
+- 断続的な崩壊を伴う有意なTFS劣化。ジッタ、非線形歪み、または深刻な帯域幅制限を疑う。band_correlationsを検査して懸念周波数領域を特定。
 
-**シナリオ：帯域相関 [0.92, 0.90, 0.88, 0.70]（2–3、3–4、4–6、6–8 kHz）、位相コヒーレンス 0.89**
-- **解釈**：HF帯域（6–8 kHz）で深刻なTFS損失を示すが、低帯域は良好に保存。位相コヒーレンスは中程度の影響を受けている。
-- **アクション**：HF特有の問題を疑う：スルーレート制限、再構成フィルタロールオフ、または高周波に集中したジッタ。アンプまたはDAC仕様を検証。
-
-**シナリオ：全相関 ≥ 0.95、位相コヒーレンス 0.98、群遅延標準偏差 0.05 ms**
-- **解釈**：優れたTFS保存；最小限の位相歪みとフラット群遅延。デバイスは微細構造の完全性を維持。
-- **アクション**：参照品質パフォーマンス；さらなる調査不要。
+**シナリオ：帯域相関 [0.92, 0.90, 0.88, 0.70]（2–3、3–4、4–6、6–8 kHz）**
+- HF帯域で深刻なTFS損失を示すが、低帯域は保存。スルーレート制限、再構成フィルタロールオフ、または高周波に集中したジッタを疑う。
 
 ---
 
-## 5. サンプル信号で何が分かるか
+## 5. 推奨テスト信号
 
-### 5.1 `generate.py` のテスト信号利用
+TFSメトリクスは、高周波成分（2–8 kHz）と明確な位相構造を含む信号で最も効果的です。適切なテスト信号には以下が含まれます：
 
-リポジトリには複数のテスト信号タイプ（`src/microstructure_metrics/cli/generate.py` 参照）が含まれており、TFSの理解に有用です：
+### 5.1 信号タイプと期待される挙動
 
-#### A. **マルチトーン** (`multitone`)
+| 信号タイプ | 理想的相関 | TFSが明かすこと |
+|-----------|----------|---------------|
+| **マルチトーン** (`multitone`) | > 0.95 | 高調波位相関係、相互変調、周波数成分間の群遅延変動 |
+| **トーンバースト** (`tone-burst`) | > 0.92 | フィルタリンギング（前/後）、非最小位相フィルタからの位相非線形性、スルーレート制限 |
+| **スイープサイン** (`sweep`) | > 0.90 | 周波数依存歪み、群遅延異常、スペクトラム全体にわたる非線形アーティファクト |
+| **AM変調トーン** (`modulated`) | > 0.92 | クロックジッタ、包絡-搬送波結合、相互変調歪み |
 
-**生成パラメータ**：
-- 異なる周波数の複数のサイン波（例：1 kHz、2 kHz、4 kHz、8 kHz）
-- 等振幅または重み付き振幅
+### 5.2 使用上の注意
 
-**TFS が明かすこと**：
-- **高調波位相関係**：トーン間の相対位相が歪むとTFS相関が低下
-- **相互変調**：非線形デバイスはIM積を導入し、微細構造を破壊
-- **群遅延変動**：異なる周波数成分が異なる遅延を受けると位相コヒーレンスが低下
-
-**無歪信号の期待TFS相関**：**> 0.95**
-
----
-
-#### B. **トーンバースト** (`tone-burst`)
-
-**生成パラメータ**（デフォルト値）：
-- 8 kHz サイン波、10周期、±2 ms ハン窓フェード
-- 鋭い過渡開始/停止を作成
-
-**TFS が明かすこと**：
-- **フィルタリンギング**：急峻なフィルタからのプレリンギングまたはポストリンギングが位相歪みとして現れる
-- **位相非線形性**：非最小位相フィルタは過渡エッジ中にTFS相関を低下させる
-- **スルーレート制限**：高速振動がぼやける → TFS相関低下
-
-**例**：
-- 参照（`tone-burst` デフォルト）：TFS相関 > 0.93
-- 最小位相フィルタ（プレリングなし）のDUT：TFS相関 ~0.90–0.92
-- 線形位相FIR（プレリンギングあり）のDUT：TFS相関 ~0.80–0.85、位相コヒーレンス低下
-
----
-
-#### C. **スイープサイン** (`sweep`)
-
-**生成パラメータ**：
-- 20 Hz から 20 kHz への周波数スイープ（10秒）
-- 対数または線形スイープ
-
-**TFS が明かすこと**：
-- **周波数依存歪み**：TFS帯域相関がどの周波数領域が影響を受けているかを明らかにする
-- **群遅延異常**：スイープ中の急速な位相変化により、特定周波数でTFS相関が低下
-- **非線形歪み**：高調波生成が微細構造を破壊、特に低周波（サブハーモニクス）と高周波（エイリアシング）
-
-**例**：
-- 参照（`sweep` デフォルト）：全帯域でTFS相関 > 0.90
-- 群遅延リップルのあるDUT：帯域相関が変動（例：2–3、3–4、4–6、6–8 kHz で 0.92、0.88、0.85、0.78）
-- HFロールオフのあるDUT：高帯域（6–8 kHz）相関が < 0.75 に低下
-
----
-
-#### D. **AM変調トーン** (`modulated`)
-
-**生成パラメータ**：
-- 搬送波：4 kHz サイン波
-- AM変調：10 Hz、深度 0.5（50%）
-
-**TFS が明かすこと**：
-- **包絡-搬送波分離**：TFSは包絡とは独立して搬送波位相を抽出；AM歪みは位相ジッタとして現れる
-- **クロックジッタ**：変調サイドバンドはタイミング誤差に敏感 → TFS相関低下
-- **相互変調**：非線形デバイスは搬送波と変調を混合し、微細構造を破壊
-
-**例**：
-- 参照（`modulated` デフォルト）：TFS相関 > 0.92
-- クロックジッタ（±1サンプル RMS）のあるDUT：TFS相関 ~0.85–0.88、位相コヒーレンス ~0.90
-- IM歪みのあるDUT：TFS相関 < 0.80、帯域相関が局所的問題を示す
-
----
-
-### 5.2 比較マトリックス：相関値の意味
-
-| 信号タイプ | 理想的相関 | < 0.85 の場合の解釈 |
-|-----------|----------|------------------|
-| `multitone` | > 0.95 | トーン間の位相歪み、IM歪み、または群遅延リップル |
-| `tone-burst` (過渡) | > 0.92 | フィルタリンギング、位相非線形性、またはスルーレート制限 |
-| `sweep` (広帯域) | > 0.90 | 周波数依存歪み、群遅延異常、またはHFロールオフ |
-| `modulated` (AM) | > 0.92 | クロックジッタ、IM歪み、または包絡-搬送波結合 |
-
-### 5.3 生成と分析の例
-
-1. **参照信号を生成**（理想、高品質出力）：
-   ```bash
-   python -m microstructure_metrics.cli generate multitone \
-     --duration 10 --sample-rate 48000 \
-     --frequencies 1000 2000 4000 8000 \
-     --output multitone_ref.wav
-   ```
-
-2. **劣化版をシミュレート**（例：ジッタを追加）：
-   ```bash
-   # 例：リサンプリングで軽いジッタ/エイリアシングを導入
-   sox multitone_ref.wav -r 44100 dut_multitone.wav rate -v
-   sox dut_multitone.wav -r 48000 dut_multitone_resampled.wav rate -v
-   ```
-
-3. **TFSと類似度を計算**：
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.tfs import calculate_tfs_correlation
-   import soundfile as sf
-   ref, sr = sf.read('multitone_ref.wav')
-   dut, sr = sf.read('dut_multitone_resampled.wav')
-   result = calculate_tfs_correlation(
-       reference=ref, dut=dut, sample_rate=sr,
-       freq_bands=[(2000, 3000), (3000, 4000), (4000, 6000), (6000, 8000)]
-   )
-   print(f'TFS平均相関: {result.mean_correlation:.3f}')
-   print(f'位相コヒーレンス: {result.phase_coherence:.3f}')
-   print(f'群遅延標準偏差: {result.group_delay_std_ms:.3f} ms')
-   print(f'帯域相関: {result.band_correlations}')
-   "
-   ```
-
-4. **結果を解釈**：
-   - 平均相関が 0.80 に低下：リサンプリングアーティファクトからの有意なTFS劣化
-   - 位相コヒーレンスが 0.85 に低下：中程度の位相ジッタ導入
-   - 群遅延標準偏差 > 0.2 ms：リサンプラーからの周波数依存タイミング誤差
+- 理想的閾値を下回る相関は、対応する周波数範囲での位相歪み、ジッタ、またはフィルタアーティファクトを示唆
+- 常に `band_correlations` を検査して、どの周波数帯域が影響を受けているかを特定
+- 詳細な信号パラメータと生成コマンドについては、`docs/jp/signal-specifications.md` および `docs/jp/user-guide.md` を参照
 
 ---
 
