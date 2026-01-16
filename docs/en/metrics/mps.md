@@ -25,10 +25,10 @@ Degradation in MPS reveals filtering artifacts, bandwidth restrictions, slew-rat
 
 ### Typical Applications
 
-- Evaluating DAC/amp microphone-less perceived fidelity
 - Detecting artifacts from lossy codecs or aggressive DSP (EQ, compression)
 - Assessing damage from nonlinear systems (soft-clipping, harmonic warping)
-- Comparing preserved texture between audio devices under equivalent output levels
+- Comparing envelope preservation between audio devices
+- Diagnosing slew-rate limiting, bandwidth restrictions, or clipping
 
 ---
 
@@ -214,8 +214,8 @@ Optional weights can emphasize higher modulation frequencies (e.g., 4–64 Hz), 
 - Likely: Localized issue in that band (e.g., resonance, nonlinearity, digital clipping in a specific frequency region)
 - Check: Spectrogram of residual signal
 
-**Scenario: All correlations ≥0.95, THD+N and TFS also excellent**
-- Conclusion: Device preserves both steady-state and dynamic content; likely high-fidelity
+**Scenario: All correlations ≥0.95**
+- Conclusion: Device preserves modulation texture well; excellent envelope fidelity
 
 ---
 
@@ -313,7 +313,6 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 | `am-attack` (gating) | > 0.93 | Slew-rate limiting, edge rounding, or slow attack/release |
 | `tone-burst` (transient) | > 0.92 | Filter ringing, pre-/post-echo, or phase nonlinearity |
 | `notched-noise` (broadband with notch) | > 0.90 | Notch filling (nonlinearity), envelope artifacts, or bandwidth extension |
-| `pink-noise` (natural) | > 0.88 | General envelope fidelity; less sensitive than modulated signals |
 
 ### 5.3 How to Generate and Analyze Examples
 
@@ -327,7 +326,6 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 
 2. **Simulate a degraded version** (e.g., low-pass filter at 16 kHz):
    ```bash
-   # Use sox or your own DSP to create dut_modulated.wav
    sox modulated_ref.wav dut_modulated.wav lowpass 16000
    ```
 
