@@ -16,10 +16,10 @@ MPS analyzes the temporal envelope of narrow audio bands (via a gammatone or mel
 
 ### Why Modulation Matters
 
-Human listeners are highly sensitive to modulation structure because:
+Human listeners are highly sensitive to modulation structure because it carries:
 - **Transient details**: Attack shapes, vibrato, tremolo
 - **Spectral dynamics**: How energy distribution shifts over time
-- **Auditory illusions**: Interplay between loudness fluctuations and frequency content
+- **Loudness movement**: Perceived changes driven by envelope fluctuations
 
 Degradation in MPS reveals filtering artifacts, bandwidth restrictions, slew-rate limiting, or envelope clipping that might not appear in harmonic distortion measurements.
 
@@ -238,22 +238,6 @@ The repository includes several test signal types (see `src/microstructure_metri
 - Reference vs. DUT comparison shows if modulation is preserved or smeared
 - If AM/FM content is attenuated or frequency-shifted, MPS correlation drops significantly
 
-**Example workflow**:
-```bash
-# Generate reference modulated signal
-python -m microstructure_metrics.cli generate modulated \
-  --duration 10 --sample-rate 48000 \
-  --carrier 1000 --am-freq 4 --am-depth 0.5 \
-  --output ref_modulated.wav
-
-# Pass through a simulated device (e.g., 16-bit quantization, low-pass filter)
-# Generate test file and compute MPS
-python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav \
-  --metrics mps --output report.json
-```
-
-Expected MPS correlation for undistorted signal: **> 0.95**
-
 ---
 
 #### B. **AM Attack** (`am-attack`)
@@ -269,11 +253,6 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 - If device has slow response, attack edges blur → modulation energy spreads to lower frequencies
 - Correlation degradation indicates loss of transient sharpness
 
-**Example**:
-- Reference (`am-attack` defaults): MPS shows sharp concentration at 10 Hz + harmonics
-- DUT with 1 ms slew-rate limit: MPS broadens, energy shifts downward, correlation ~0.8–0.85
-- Device with extreme low-pass: MPS flattens, correlation < 0.7
-
 ---
 
 #### C. **Notched-Noise** (`notched-noise`)
@@ -287,7 +266,7 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 - Modulation spectrum is broadband (0.5–64 Hz) but shows **local depth** at the notch audio frequency
 - Ideal for stress-testing envelope extraction around filtering artifacts
 - If device preserves the notch shape, MPS band_correlations at notch frequency ≈ correlation at surrounding bands
-- Nonlinear devices may "fill in" the notch → mps_correlation increases artifactually (residual structure reappears)
+- Nonlinear devices may partially "fill in" the notch, reducing band-specific agreement
 
 ---
 
@@ -316,39 +295,20 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 
 ### 5.3 How to Generate and Analyze Examples
 
-1. **Generate reference signal** (ideal, high-quality output):
+1. **Generate a reference and record a DUT output** (same signal through your device chain).
+2. **Compute MPS and similarity**:
    ```bash
-   python -m microstructure_metrics.cli generate modulated \
+   uv run microstructure-metrics generate modulated \
      --duration 10 --sample-rate 48000 \
      --carrier 1000 --am-freq 4 --am-depth 0.5 \
-     --output modulated_ref.wav
-   ```
+     --output ref.wav
 
-2. **Simulate a degraded version** (e.g., low-pass filter at 16 kHz):
-   ```bash
-   sox modulated_ref.wav dut_modulated.wav lowpass 16000
+   uv run microstructure-metrics report ref.wav dut.wav \
+     --metrics mps --output report.json
    ```
-
-3. **Compute MPS and similarity**:
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.mps import calculate_mps_similarity
-   import soundfile as sf
-   ref, sr = sf.read('modulated_ref.wav')
-   dut, sr = sf.read('dut_modulated.wav')
-   result = calculate_mps_similarity(
-       reference=ref, dut=dut, sample_rate=sr,
-       audio_freq_range=(100, 8000), mod_freq_range=(0.5, 64)
-   )
-   print(f'MPS Correlation: {result.mps_correlation:.3f}')
-   print(f'Band correlations (sample): {list(result.band_correlations.items())[:3]}')
-   "
-   ```
-
-4. **Interpret results**:
-   - If correlation drops to 0.70: envelope significantly altered by DSP
-   - If only high-frequency bands degrade: mid-band to treble filtering
-   - If all bands degrade uniformly: global nonlinearity or level mismatch
+3. **Interpret results**:
+   - If only specific bands degrade: band-limited filtering or localized nonlinearity
+   - If all bands degrade similarly: global nonlinearity, clipping, or level mismatch
 
 ---
 
@@ -387,8 +347,8 @@ Expected MPS correlation for undistorted signal: **> 0.95**
 
 ## Appendix: Common MPS Pitfalls
 
-1. **Forgetting DC removal**: Leads to huge energy at modulation frequency = 0, distorting the interpretation.
-2. **Using the wrong filterbank**: Mel vs. Gammatone can give different band correlations; document which you used.
-3. **Modulation range too narrow**: (e.g., 4–16 Hz) misses high-frequency texture; use at least 0.5–64 Hz.
-4. **Comparing signals at vastly different levels**: Always level-match reference and DUT before computing similarity.
-5. **Ignoring band_correlations**: A single overall correlation value can hide localized problems; always inspect per-band data.
+1. **Skipping DC removal**: Inflates energy near modulation frequency 0 and dominates the spectrum.
+2. **Undocumented filterbank choice**: Mel vs. gammatone changes band structure; record the choice.
+3. **Too narrow modulation range**: Misses texture; start with 0.5–64 Hz unless you have a reason to narrow it.
+4. **Level mismatch between ref and DUT**: Level-match before computing similarity.
+5. **Relying on a single score**: Use `band_correlations` to catch localized problems.
