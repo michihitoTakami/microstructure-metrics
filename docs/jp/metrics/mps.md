@@ -16,10 +16,10 @@ MPSは、狭帯域フィルタバンク（ガンマトーンまたはメルフ�
 
 ### なぜ変調構造が重要か
 
-人間の聴覚は変調構造に非常に敏感です：
+人間の聴覚は変調構造に非常に敏感です。特に以下の情報に関与します：
 - **過渡特性の詳細**：立ち上がり形状、ビブラート、トレモロ
 - **スペクトル動態**：エネルギー分布が時間とともにどのように変化するか
-- **聴覚錯覚**：ラウドネス変動と周波数内容の相互作用
+- **ラウドネスの動き**：包絡の揺らぎがもたらす知覚的な変化
 
 MPS劣化は、調和歪み測定では現れないフィルタリングアーティファクト、帯域制限、スルーレート制限、または包絡クリッピングを明らかにします。
 
@@ -238,22 +238,6 @@ $$d_{\text{MPS}} = \sqrt{\frac{1}{M \cdot K} \sum_{i,j} (\text{ref}_{i,j} - \tex
 - 参照 vs DUT 比較は、変調が保存されるか、またはスメア化されるかを示す
 - AM/FM内容が減衰または周波数シフトする場合、MPS相関が大幅に低下
 
-**ワークフロー例**：
-```bash
-# 参照変調信号を生成
-python -m microstructure_metrics.cli generate modulated \
-  --duration 10 --sample-rate 48000 \
-  --carrier 1000 --am-freq 4 --am-depth 0.5 \
-  --output ref_modulated.wav
-
-# シミュレーション機器（例：16ビット量子化、ローパスフィルタ）を通す
-# テストファイルを生成してMPS計算
-python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav \
-  --metrics mps --output report.json
-```
-
-無歪信号の期待MPS相関：**> 0.95**
-
 ---
 
 #### B. **AM立ち上がり** (`am-attack`)
@@ -269,11 +253,6 @@ python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav 
 - デバイスのスルーレートが遅い場合、立ち上がりエッジがぼやける → 変調エネルギーが低周波へシフト
 - 相関劣化は過渡シャープネスの損失を示す
 
-**例**：
-- 参照（`am-attack`デフォルト）：MPS は 10 Hz + 高調波に鋭く集中
-- スルーレート制限 1 ms の DUT：MPS がブロード化、エネルギーが下方シフト、相関 ~0.8–0.85
-- 極端なローパスのデバイス：MPS がフラット化、相関 < 0.7
-
 ---
 
 #### C. **ノッチノイズ** (`notched-noise`)
@@ -287,7 +266,7 @@ python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav 
 - 変調スペクトラムは広帯域（0.5–64 Hz）だが、ノッチ聴覚周波数に **局所的な深さ** を示す
 - フィルタリングアーティファクト周辺での包絡抽出のストレステスト
 - デバイスがノッチ形状を保存する場合、MPS バンド相関はノッチ周波数 ≈ 周辺バンド相関
-- 非線形デバイスはノッチを「埋める」可能 → mps_correlation がアーティファクト的に増加（残差構造が再出現）
+- 非線形デバイスはノッチを部分的に「埋める」可能があり、バンド別の整合性が低下する
 
 ---
 
@@ -316,39 +295,20 @@ python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav 
 
 ### 5.3 生成と分析の例
 
-1. **参照信号を生成**（理想、高品質出力）：
+1. **参照信号を生成し、DUT出力を録音**（同一信号をデバイスチェーンに通す）。
+2. **MPS を計算**：
    ```bash
-   python -m microstructure_metrics.cli generate modulated \
+   uv run microstructure-metrics generate modulated \
      --duration 10 --sample-rate 48000 \
      --carrier 1000 --am-freq 4 --am-depth 0.5 \
-     --output modulated_ref.wav
-   ```
+     --output ref.wav
 
-2. **劣化版をシミュレート**（例：16 kHz ローパスフィルタ）：
-   ```bash
-   sox modulated_ref.wav dut_modulated.wav lowpass 16000
+   uv run microstructure-metrics report ref.wav dut.wav \
+     --metrics mps --output report.json
    ```
-
-3. **MPS と類似度を計算**：
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.mps import calculate_mps_similarity
-   import soundfile as sf
-   ref, sr = sf.read('modulated_ref.wav')
-   dut, sr = sf.read('dut_modulated.wav')
-   result = calculate_mps_similarity(
-       reference=ref, dut=dut, sample_rate=sr,
-       audio_freq_range=(100, 8000), mod_freq_range=(0.5, 64)
-   )
-   print(f'MPS相関: {result.mps_correlation:.3f}')
-   print(f'バンド相関（サンプル）: {list(result.band_correlations.items())[:3]}')
-   "
-   ```
-
-4. **結果を解釈**：
-   - 相関が 0.70 に低下：DSP により包絡が大幅に変化
-   - 高周波バンドのみ劣化：中域から高域のフィルタリング
-   - 全バンドが均等に劣化：全体的な非線形性またはレベル不一致
+3. **結果を解釈**：
+   - 特定帯域のみ劣化：帯域限定のフィルタリング、または局所的な非線形
+   - 全帯域が同程度に劣化：全体的な非線形、クリッピング、またはレベル不一致
 
 ---
 
@@ -387,8 +347,8 @@ python -m microstructure_metrics.cli report ref_modulated.wav dut_modulated.wav 
 
 ## 付録：MPS の一般的な落とし穴
 
-1. **DC除去を忘れる**：変調周波数 = 0 でのエネルギー巨大化、解釈を歪める。
-2. **誤ったフィルタバンク選択**：メル vs ガンマトーンは異なるバンド相関を与える；どちらを使ったか記録する。
-3. **変調周波数範囲が狭すぎ**：（例：4–16 Hz）高周波テクスチャを見落とす；最低でも 0.5–64 Hz を使用。
-4. **大きく異なるレベルの信号比較**：相関計算前に必ず参照と DUT をレベル合わせ。
-5. **バンド相関を無視**：単一の全体相関値は局所的問題を隠す可能性；常にバンド別データを確認。
+1. **DC除去を省略**：変調周波数 0 付近のエネルギーが支配的になり、解釈を歪める。
+2. **フィルタバンク選択の未記録**：メル vs ガンマトーンでバンド構造が変わるため、選択を残す。
+3. **変調周波数範囲が狭すぎ**：テクスチャを見落としやすい。理由がなければ 0.5–64 Hz から始める。
+4. **参照とDUTのレベル不一致**：類似度計算前にレベル合わせを行う。
+5. **単一スコアへの依存**：`band_correlations` を併用して局所的問題を見逃さない。
