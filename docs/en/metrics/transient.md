@@ -26,27 +26,19 @@ By comparing reference and DUT (Device Under Test) events, the metric reveals:
 
 ### Why Transients Matter
 
-Human auditory perception is highly sensitive to transient structure because:
+Human auditory perception is highly sensitive to transient structure:
 
 - **Spatial localization**: transient timing encodes directional cues
 - **Source identification**: attack envelopes distinguish instruments and sounds
 - **Dynamic perception**: edge sharpness correlates with perceived clarity and impact
 - **Masking**: even slight smearing or pre-ringing can reduce intelligibility or create audible artifacts
 
-Degradation in transient metrics indicates:
-
-- Slew-rate limiting in amplifiers or DACs
-- Filter ringing (especially linear-phase FIR or resonant analog filters)
-- Windowing artifacts from time-domain processing
-- Bandwidth restrictions that blur sharp edges
-
 ### Typical Applications
 
-- Detecting slew-rate limitations in amplifiers or DACs
-- Assessing filter ringing and pre-echo artifacts
-- Comparing reconstruction quality of different sample-rate converters
-- Diagnosing edge rounding from aggressive anti-aliasing or low-pass filters
+- Detecting slew-rate limitations and filter ringing in amplifiers or DACs
+- Comparing reconstruction quality of sample-rate converters
 - Evaluating transient preservation in lossy codecs or DSP chains
+- Assessing pre-echo artifacts from linear-phase filters
 
 ---
 
@@ -356,65 +348,45 @@ The repository includes several test signal types (see `src/microstructure_metri
 
 #### A. **Impulse** (`impulse`)
 
-**Generator Parameters** (defaults):
-- Single Dirac delta (1 sample wide) or short pulse (few samples)
+**Generator Parameters**:
+- Single Dirac delta (1 sample wide) or short pulse
 - Amplitude: -1 dBFS
 
 **What Transient reveals**:
-- **Cleanest reference**: sharp edge with minimal smoothing
-- **Attack time**: typically <0.1 ms for ideal impulse
-- **Edge sharpness**: maximum possible for given sample rate
-- If DUT shows \(\Delta t_{\text{attack}} > 0.5\) ms or \(r_{\text{sharpness}} < 0.8\), suspect anti-aliasing filter or DAC reconstruction filter
-
-**Example workflow**:
-```bash
-# Generate reference impulse
-python -m microstructure_metrics.cli generate impulse \
-  --duration 1 --sample-rate 48000 \
-  --output ref_impulse.wav
-
-# Pass through device and compare
-python -m microstructure_metrics.cli report ref_impulse.wav dut_impulse.wav \
-  --metrics transient --output report.json
-```
-
-Expected for transparent system: \(\Delta t_{\text{attack}} < 0.1\) ms, \(r_{\text{sharpness}} > 0.95\), \(r_{\text{width}} < 1.1\)
+- Sharp edge with minimal smoothing—maximum possible edge sharpness for given sample rate
+- Attack time typically <0.1 ms for ideal impulse
+- DUT with \(\Delta t_{\text{attack}} > 0.5\) ms or \(r_{\text{sharpness}} < 0.8\) indicates anti-aliasing or DAC reconstruction filter artifacts
+- **Expected for transparent system**: \(\Delta t_{\text{attack}} < 0.1\) ms, \(r_{\text{sharpness}} > 0.95\), \(r_{\text{width}} < 1.1\)
 
 ---
 
 #### B. **Tone Burst** (`tone-burst`)
 
-**Generator Parameters** (defaults):
+**Generator Parameters**:
 - 8 kHz sine, 10 cycles, ±2 ms Hann window fade
-- Creates sharp attack and decay edges
 
 **What Transient reveals**:
-- **Two transient events**: attack (rising edge) and release (falling edge)
-- **Sensitive to filter ringing**: pre-ringing appears as increased low-level attack time and pre-energy fraction
-- **Phase distortion**: can shift energy distribution (skewness delta)
-
-**Example**:
-- Reference: clean burst with symmetric energy (\(E_{\text{pre}} \approx 0.5\))
-- DUT with linear-phase FIR: \(\Delta E_{\text{pre}} > 0.1\), low-level attack time increases
-- DUT with resonant filter: \(r_{\text{width}} > 1.2\), energy skewness changes
+- Two transient events: attack and release edges
+- Sensitive to filter ringing—pre-ringing appears as increased low-level attack time and \(\Delta E_{\text{pre}}\)
+- **Reference**: clean burst with symmetric energy (\(E_{\text{pre}} \approx 0.5\))
+- **DUT with linear-phase FIR**: \(\Delta E_{\text{pre}} > 0.1\), low-level attack time increases
+- **DUT with resonant filter**: \(r_{\text{width}} > 1.2\), energy skewness changes
 
 ---
 
 #### C. **AM Attack** (`am-attack`)
 
-**Generator Parameters** (defaults):
+**Generator Parameters**:
 - 1 kHz carrier with amplitude gating
 - Attack: 2 ms, Release: 10 ms, Period: 100 ms
 
 **What Transient reveals**:
-- **Multiple transient events** (one per gating period)
-- **Statistical robustness**: median and percentiles across many events reveal consistent vs. intermittent degradation
-- **Sensitive to slew-rate limiting**: \(\Delta t_{\text{attack}}\) increases if device cannot track fast amplitude changes
-
-**Example**:
-- Ideal device: all events show consistent metrics (low std, p05 ≈ p95 ≈ median)
-- Slew-limited device: \(\Delta t_{\text{attack}}\) > 0.5 ms, \(r_{\text{sharpness}} < 0.8\)
-- Level-dependent device: high std in attack time (some events faster than others)
+- Multiple transient events (one per gating period) provide statistical robustness
+- Median and percentiles reveal consistent vs. intermittent degradation
+- Sensitive to slew-rate limiting—\(\Delta t_{\text{attack}}\) increases if device cannot track fast amplitude changes
+- **Ideal device**: consistent metrics (low std, p05 ≈ p95 ≈ median)
+- **Slew-limited device**: \(\Delta t_{\text{attack}}\) > 0.5 ms, \(r_{\text{sharpness}} < 0.8\)
+- **Level-dependent device**: high std in attack time
 
 ---
 
@@ -426,40 +398,32 @@ Expected for transparent system: \(\Delta t_{\text{attack}} < 0.1\) ms, \(r_{\te
 | `tone-burst` | 2 (attack + release) | \(\Delta E_{\text{pre}}\), low-level attack time | Pre-ringing from linear-phase or resonant filter |
 | `am-attack` | ~10–100 (periodic gating) | Distribution stats (p05, p95, std) | Intermittent artifacts, slew-rate limiting |
 
-### 5.3 How to Generate and Analyze Examples
+### 5.3 Example Workflow
 
-1. **Generate reference signal** (ideal, high-quality output):
-   ```bash
-   python -m microstructure_metrics.cli generate impulse \
-     --duration 1 --sample-rate 48000 \
-     --output impulse_ref.wav
-   ```
+```bash
+# 1. Generate reference signal
+python -m microstructure_metrics.cli generate impulse \
+  --duration 1 --sample-rate 48000 --output ref.wav
 
-2. **Simulate degradation** (e.g., low-pass filter at 10 kHz):
-   ```bash
-   sox impulse_ref.wav dut_impulse.wav lowpass 10000
-   ```
+# 2. Pass through device or simulate degradation
+# (e.g., via loopback recording or DSP processing)
 
-3. **Compute transient metrics**:
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.transient import calculate_transient_metrics
-   import soundfile as sf
-   ref, sr = sf.read('impulse_ref.wav')
-   dut, sr = sf.read('dut_impulse.wav')
-   result = calculate_transient_metrics(
-       reference=ref, dut=dut, sample_rate=sr
-   )
-   print(f'Attack time delta: {result.attack_time_delta_ms:.3f} ms')
-   print(f'Edge sharpness ratio: {result.edge_sharpness_ratio:.3f}')
-   print(f'Transient smearing index: {result.transient_smearing_index:.3f}')
-   "
-   ```
+# 3. Compute metrics using CLI report
+python -m microstructure_metrics.cli report ref.wav dut.wav \
+  --metrics transient --output report.json
 
-4. **Interpret results**:
-   - Attack time delta > 0.2 ms: significant slowing (filter or slew-rate issue)
-   - Edge sharpness ratio < 0.85: noticeable edge rounding
-   - Transient smearing index > 1.15: clear widening/smearing
+# 4. Or use Python API for programmatic access
+python -c "
+from microstructure_metrics.metrics.transient import calculate_transient_metrics
+import soundfile as sf
+ref, sr = sf.read('ref.wav')
+dut, _ = sf.read('dut.wav')
+result = calculate_transient_metrics(reference=ref, dut=dut, sample_rate=sr)
+print(f'Attack delta: {result.attack_time_delta_ms:.3f} ms')
+print(f'Sharpness ratio: {result.edge_sharpness_ratio:.3f}')
+print(f'Smearing index: {result.transient_smearing_index:.3f}')
+"
+```
 
 ---
 

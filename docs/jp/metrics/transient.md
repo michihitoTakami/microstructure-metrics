@@ -33,20 +33,12 @@
 - **ダイナミック知覚**：エッジのシャープネスは知覚される明瞭度とインパクトに関連
 - **マスキング**：わずかなスメア化やプリリンギングでも、明瞭度が低下したり、可聴アーティファクトを作成したりする可能性
 
-過渡メトリクスの劣化は以下を示します：
-
-- アンプまたはDACのスルーレート制限
-- フィルタリンギング（特に線形位相FIRまたは共振アナログフィルタ）
-- 時間領域処理からのウィンドウイングアーティファクト
-- 鋭いエッジをぼかす帯域制限
-
 ### 典型的な応用場面
 
-- アンプやDACのスルーレート制限の検出
-- フィルタリンギングとプリエコーアーティファクトの評価
-- 異なるサンプルレートコンバータの再構成品質の比較
-- 積極的なアンチエイリアシングまたはローパスフィルタによるエッジの丸まりの診断
+- アンプやDACのスルーレート制限とフィルタリンギングの検出
+- サンプルレートコンバータの再構成品質の比較
 - 非可逆コーデックやDSPチェーンでの過渡保存の評価
+- 線形位相フィルタからのプリエコーアーティファクトの評価
 
 ---
 
@@ -356,65 +348,45 @@ function calculate_transient_metrics(reference, dut, sample_rate, params):
 
 #### A. **インパルス** (`impulse`)
 
-**生成パラメータ**（デフォルト値）：
-- 単一ディラックデルタ（1サンプル幅）または短いパルス（数サンプル）
+**生成パラメータ**：
+- 単一ディラックデルタ（1サンプル幅）または短いパルス
 - 振幅：-1 dBFS
 
 **Transient が明かすこと**：
-- **最もクリーンな参照**：最小限のスムージングで鋭いエッジ
-- **立ち上がり時間**：理想的なインパルスで通常 <0.1 ms
-- **エッジシャープネス**：与えられたサンプルレートで最大可能
-- DUTが \(\Delta t_{\text{attack}} > 0.5\) ms または \(r_{\text{sharpness}} < 0.8\) を示す場合、アンチエイリアシングフィルタまたはDAC再構成フィルタを疑う
-
-**ワークフロー例**：
-```bash
-# 参照インパルスを生成
-python -m microstructure_metrics.cli generate impulse \
-  --duration 1 --sample-rate 48000 \
-  --output ref_impulse.wav
-
-# デバイスを通して比較
-python -m microstructure_metrics.cli report ref_impulse.wav dut_impulse.wav \
-  --metrics transient --output report.json
-```
-
-透明なシステムの期待値：\(\Delta t_{\text{attack}} < 0.1\) ms、\(r_{\text{sharpness}} > 0.95\)、\(r_{\text{width}} < 1.1\)
+- 最小限のスムージングで鋭いエッジ—与えられたサンプルレートで最大可能なエッジシャープネス
+- 理想的なインパルスで立ち上がり時間は通常 <0.1 ms
+- \(\Delta t_{\text{attack}} > 0.5\) ms または \(r_{\text{sharpness}} < 0.8\) のDUTはアンチエイリアシングまたはDAC再構成フィルタのアーティファクトを示す
+- **透明なシステムの期待値**：\(\Delta t_{\text{attack}} < 0.1\) ms、\(r_{\text{sharpness}} > 0.95\)、\(r_{\text{width}} < 1.1\)
 
 ---
 
 #### B. **トーンバースト** (`tone-burst`)
 
-**生成パラメータ**（デフォルト値）：
+**生成パラメータ**：
 - 8 kHz サイン波、10周期、±2 ms ハン窓フェード
-- 鋭い立ち上がりと減衰エッジを作成
 
 **Transient が明かすこと**：
-- **2つの過渡イベント**：立ち上がり（立ち上がりエッジ）と減衰（立ち下がりエッジ）
-- **フィルタリンギングに敏感**：プリリンギングは低レベル立ち上がり時間と前エネルギー割合の増加として現れる
-- **位相歪**：エネルギー分布をシフトできる（スキューネスデルタ）
-
-**例**：
-- 参照：対称エネルギーでクリーンバースト（\(E_{\text{pre}} \approx 0.5\)）
-- 線形位相FIRのDUT：\(\Delta E_{\text{pre}} > 0.1\)、低レベル立ち上がり時間が増加
-- 共振フィルタのDUT：\(r_{\text{width}} > 1.2\)、エネルギースキューネスが変化
+- 2つの過渡イベント：立ち上がりと減衰エッジ
+- フィルタリンギングに敏感—プリリンギングは低レベル立ち上がり時間と \(\Delta E_{\text{pre}}\) の増加として現れる
+- **参照**：対称エネルギーでクリーンバースト（\(E_{\text{pre}} \approx 0.5\)）
+- **線形位相FIRのDUT**：\(\Delta E_{\text{pre}} > 0.1\)、低レベル立ち上がり時間が増加
+- **共振フィルタのDUT**：\(r_{\text{width}} > 1.2\)、エネルギースキューネスが変化
 
 ---
 
 #### C. **AM立ち上がり** (`am-attack`)
 
-**生成パラメータ**（デフォルト値）：
+**生成パラメータ**：
 - 1 kHz搬送波、振幅ゲーティング
 - 立ち上がり：2 ms、立ち下がり：10 ms、周期：100 ms
 
 **Transient が明かすこと**：
-- **複数の過渡イベント**（ゲーティング周期ごとに1つ）
-- **統計的頑健性**：多くのイベント間の中央値とパーセンタイルは、一貫した劣化と断続的劣化を明らかにする
-- **スルーレート制限に敏感**：デバイスが速い振幅変化を追跡できない場合、\(\Delta t_{\text{attack}}\) が増加
-
-**例**：
-- 理想的なデバイス：すべてのイベントが一貫したメトリクスを示す（低std、p05 ≈ p95 ≈ 中央値）
-- スルーレート制限デバイス：\(\Delta t_{\text{attack}}\) > 0.5 ms、\(r_{\text{sharpness}} < 0.8\)
-- レベル依存デバイス：立ち上がり時間の高std（一部のイベントが他より速い）
+- 複数の過渡イベント（ゲーティング周期ごとに1つ）が統計的頑健性を提供
+- 中央値とパーセンタイルは、一貫した劣化と断続的劣化を明らかにする
+- スルーレート制限に敏感—デバイスが速い振幅変化を追跡できない場合、\(\Delta t_{\text{attack}}\) が増加
+- **理想的なデバイス**：一貫したメトリクス（低std、p05 ≈ p95 ≈ 中央値）
+- **スルーレート制限デバイス**：\(\Delta t_{\text{attack}}\) > 0.5 ms、\(r_{\text{sharpness}} < 0.8\)
+- **レベル依存デバイス**：立ち上がり時間の高std
 
 ---
 
@@ -426,40 +398,32 @@ python -m microstructure_metrics.cli report ref_impulse.wav dut_impulse.wav \
 | `tone-burst` | 2（立ち上がり + 減衰） | \(\Delta E_{\text{pre}}\)、低レベル立ち上がり時間 | 線形位相または共振フィルタからのプリリンギング |
 | `am-attack` | ~10–100（周期ゲーティング） | 分布統計（p05、p95、std） | 断続的アーティファクト、スルーレート制限 |
 
-### 5.3 生成と分析の例
+### 5.3 ワークフロー例
 
-1. **参照信号を生成**（理想、高品質出力）：
-   ```bash
-   python -m microstructure_metrics.cli generate impulse \
-     --duration 1 --sample-rate 48000 \
-     --output impulse_ref.wav
-   ```
+```bash
+# 1. 参照信号を生成
+python -m microstructure_metrics.cli generate impulse \
+  --duration 1 --sample-rate 48000 --output ref.wav
 
-2. **劣化をシミュレート**（例：10 kHzローパスフィルタ）：
-   ```bash
-   sox impulse_ref.wav dut_impulse.wav lowpass 10000
-   ```
+# 2. デバイスを通すまたは劣化をシミュレート
+# （例：ループバック録音またはDSP処理）
 
-3. **過渡メトリクスを計算**：
-   ```bash
-   python -c "
-   from microstructure_metrics.metrics.transient import calculate_transient_metrics
-   import soundfile as sf
-   ref, sr = sf.read('impulse_ref.wav')
-   dut, sr = sf.read('dut_impulse.wav')
-   result = calculate_transient_metrics(
-       reference=ref, dut=dut, sample_rate=sr
-   )
-   print(f'立ち上がり時間デルタ: {result.attack_time_delta_ms:.3f} ms')
-   print(f'エッジシャープネス比: {result.edge_sharpness_ratio:.3f}')
-   print(f'過渡スメア化指数: {result.transient_smearing_index:.3f}')
-   "
-   ```
+# 3. CLI reportでメトリクスを計算
+python -m microstructure_metrics.cli report ref.wav dut.wav \
+  --metrics transient --output report.json
 
-4. **結果を解釈**：
-   - 立ち上がり時間デルタ > 0.2 ms：有意な遅延（フィルタまたはスルーレートの問題）
-   - エッジシャープネス比 < 0.85：顕著なエッジの丸まり
-   - 過渡スメア化指数 > 1.15：明確な広がり/スメア化
+# 4. またはPython APIでプログラム的にアクセス
+python -c "
+from microstructure_metrics.metrics.transient import calculate_transient_metrics
+import soundfile as sf
+ref, sr = sf.read('ref.wav')
+dut, _ = sf.read('dut.wav')
+result = calculate_transient_metrics(reference=ref, dut=dut, sample_rate=sr)
+print(f'立ち上がり時間デルタ: {result.attack_time_delta_ms:.3f} ms')
+print(f'エッジシャープネス比: {result.edge_sharpness_ratio:.3f}')
+print(f'過渡スメア化指数: {result.transient_smearing_index:.3f}')
+"
+```
 
 ---
 
