@@ -18,16 +18,7 @@ The metric uses **1D Wasserstein distance** (Earth Mover's Distance) to compare 
 
 ### Why Distribution Matters
 
-Human perception is sensitive to temporal consistency and statistical regularity of audio features:
-
-- **Temporal stability**: Listeners detect sporadic breakdowns in correlation or timing even when average values are acceptable
-- **Event consistency**: Transient characteristics (attack sharpness, decay shape) should remain stable across musical passages
-- **Spatial coherence**: Binaural cues must be preserved consistently over time to maintain spatial image and localization accuracy
-
-Degradation in MDI reveals:
-- **Intermittent artifacts**: Jitter, dropouts, or sporadic nonlinearities that occur only occasionally
-- **Statistical shift**: Systematic changes in feature distributions that indicate envelope clipping, slew-rate limiting, or dynamic range compression
-- **Multi-domain coupling**: Correlated degradation across TFS, transient, and binaural domains that suggests a common root cause (e.g., NFB instability, clock issues)
+Human perception is sensitive to temporal consistency and statistical regularity of audio features. Average values alone can mask intermittent issues—listeners detect sporadic breakdowns in correlation, timing instability, or inconsistent transient handling even when overall metrics appear acceptable. MDI captures these **distributional shifts** that indicate intermittent artifacts, systematic feature changes, or correlated degradation across multiple domains.
 
 ### Typical Applications
 
@@ -42,28 +33,18 @@ Degradation in MDI reveals:
 
 ### 2.1 Wasserstein Distance (Earth Mover's Distance)
 
-For two empirical distributions \(X = \{x_i\}\) and \(Y = \{y_j\}\) with optional weights \(w^X_i\) and \(w^Y_j\), the **1D Wasserstein distance** is:
+For two empirical distributions \(X = \{x_i\}\) and \(Y = \{y_j\}\) with optional weights \(w^X_i\) and \(w^Y_j\), the **1D Wasserstein distance** quantifies the minimum "work" required to transform one distribution into the other:
 
 $$
 W_1(X, Y) = \int_{-\infty}^{\infty} |F_X(t) - F_Y(t)| \, dt
 $$
 
-where \(F_X(t)\) and \(F_Y(t)\) are the cumulative distribution functions (CDFs) of \(X\) and \(Y\).
+where \(F_X(t)\) and \(F_Y(t)\) are the cumulative distribution functions (CDFs).
 
-**Discrete implementation**:
-1. Sort samples: \(x_{(1)} \leq x_{(2)} \leq \cdots\), \(y_{(1)} \leq y_{(2)} \leq \cdots\)
-2. Construct CDFs on the union of support points: \(S = \{x_i\} \cup \{y_j\}\)
-3. Compute piecewise-linear CDFs: \(F_X(s)\), \(F_Y(s)\) for \(s \in S\)
-4. Integrate absolute difference:
-
-$$
-W_1 = \sum_{k=1}^{|S|-1} |F_X(s_k) - F_Y(s_k)| \cdot (s_{k+1} - s_k)
-$$
-
-**Properties**:
-- **Metric**: Satisfies triangle inequality; \(W_1(X, Y) = 0\) iff \(X\) and \(Y\) are identical
-- **Robust**: Less sensitive to outliers than KL-divergence or \(\chi^2\)
-- **Interpretable**: In units of the feature (e.g., ms, dB, correlation points)
+**Key properties**:
+- Satisfies triangle inequality; \(W_1(X, Y) = 0\) iff distributions are identical
+- Robust to outliers (unlike KL-divergence)
+- Result is in units of the feature (ms, dB, correlation points), making it interpretable
 
 ### 2.2 MDI Components and Scaling
 
@@ -73,80 +54,19 @@ $$
 \text{MDI}_{\text{total}} = \sum_i w_i \cdot \frac{D_i}{s_i}
 $$
 
-**Component definitions**:
+**Component summary**:
 
-#### A. TFS Correlation to Ideal (distance to 1.0)
+| Component | Formula | Sample Weights | Scale Factor | What it Measures |
+|-----------|---------|----------------|--------------|------------------|
+| **TFS Correlation** | \(W_1(\{\rho_{k,m}\}, \{1.0\})\) | Envelope energy | 0.1 | Deviation from perfect correlation (1.0) |
+| **TFS Group Delay** | \(W_1(\{\tau_k\}, \{0\text{ ms}\})\) | None | 0.2 ms | Frequency-dependent timing shifts |
+| **Transient Attack** | \(W_1(\{\text{attack}_{\text{ref}}\}, \{\text{attack}_{\text{dut}}\})\) | Peak amplitude | 1.0 ms | Attack timing shifts or variability |
+| **Transient Width** | \(W_1(\{\text{width}_{\text{ref}}\}, \{\text{width}_{\text{dut}}\})\) | Peak amplitude | 1.0 ms | Duration changes (ringing, smearing) |
+| **Binaural ITD** | \(W_1(\{\text{ITD}_{\text{ref}}\}, \{\text{ITD}_{\text{dut}}\})\) | Envelope energy | 0.2 ms | Interaural timing cue changes |
+| **Binaural ILD** | \(W_1(\{\text{ILD}_{\text{ref}}\}, \{\text{ILD}_{\text{dut}}\})\) | Envelope energy | 1.0 dB | Interaural level cue changes |
+| **Binaural IACC** | \(W_1(\{\text{IACC}_{\text{ref}}\}, \{\text{IACC}_{\text{dut}}\})\) | Envelope energy | 0.1 | Interchannel correlation changes |
 
-For each channel \(c\), compute the Wasserstein distance between the TFS correlation series \(\{\rho_{k,m}\}\) and the constant distribution \(\{1.0\}\):
-
-$$
-D_{\text{tfs,corr}}^{(c)} = W_1(\{\rho_{k,m}\}, \{1.0\})
-$$
-
-- **Weights**: Frame weights \(w_{k,m}\) (envelope-based)
-- **Scale**: \(s = 0.1\) (correlation deviation of 0.1 normalizes to 1.0)
-- **Interpretation**: Measures how far the TFS correlation distribution deviates from perfect preservation (1.0)
-
-#### B. TFS Group Delay to Ideal (distance to 0 ms)
-
-For each channel \(c\), collect the per-band group delays \(\{\tau_k\}\) and compute:
-
-$$
-D_{\text{tfs,delay}}^{(c)} = W_1(\{\tau_k\}, \{0.0 \text{ ms}\})
-$$
-
-- **Scale**: \(s = 0.2\) ms (0.2 ms group delay deviation normalizes to 1.0)
-- **Interpretation**: Measures frequency-dependent timing shifts
-
-#### C. Transient Attack Time Distribution
-
-For each channel \(c\), compare the attack time distributions of reference and DUT events:
-
-$$
-D_{\text{trans,attack}}^{(c)} = W_1(\{\text{attack}_{\text{ref}}\}, \{\text{attack}_{\text{dut}}\})
-$$
-
-- **Weights**: Peak amplitude of each event
-- **Scale**: \(s = 1.0\) ms (1 ms attack shift normalizes to 1.0)
-- **Interpretation**: Measures systematic or variable shifts in transient attack timing
-
-#### D. Transient Width Distribution
-
-$$
-D_{\text{trans,width}}^{(c)} = W_1(\{\text{width}_{\text{ref}}\}, \{\text{width}_{\text{dut}}\})
-$$
-
-- **Weights**: Peak amplitude of each event
-- **Scale**: \(s = 1.0\) ms
-- **Interpretation**: Measures changes in transient duration (e.g., ringing, smearing)
-
-#### E. Binaural ITD Distribution (stereo only)
-
-$$
-D_{\text{bin,itd}} = W_1(\{\text{ITD}_{\text{ref}}\}, \{\text{ITD}_{\text{dut}}\})
-$$
-
-- **Weights**: Frame envelope energy
-- **Scale**: \(s = 0.2\) ms (0.2 ms ITD shift normalizes to 1.0)
-- **Interpretation**: Measures changes in interaural timing cues
-
-#### F. Binaural ILD Distribution
-
-$$
-D_{\text{bin,ild}} = W_1(\{\text{ILD}_{\text{ref}}\}, \{\text{ILD}_{\text{dut}}\})
-$$
-
-- **Scale**: \(s = 1.0\) dB
-- **Interpretation**: Measures changes in interaural level cues
-
-#### G. Binaural IACC Distribution
-
-$$
-D_{\text{bin,iacc}} = W_1(\{\text{IACC}_{\text{ref}}\}, \{\text{IACC}_{\text{dut}}\})
-$$
-
-- **Scale**: \(s = 0.1\)
-- **Interpretation**: Measures changes in interchannel correlation
+TFS and Transient components are computed per-channel; Binaural components are stereo only.
 
 ### 2.3 Aggregation and Weighting
 
@@ -298,34 +218,17 @@ Typical runtime: <50 ms for all components given pre-computed TFS/Transient/Bina
 
 ## 5. Recommended Test Signals
 
-MDI is a **secondary metric** computed from TFS, Transient, and Binaural results, so suitable test signals are those that:
+MDI is a **secondary metric** computed from TFS, Transient, and Binaural results. Suitable test signals should:
 - Excite TFS bands with high-frequency content (2–8 kHz)
 - Contain transient events with varying attack characteristics
-- For stereo: Contain spatial information (ITD, ILD, IACC)
+- For stereo: Include spatial information (ITD, ILD, IACC)
 
-### 5.1 Signal Types and Expected Behavior
+See individual metric documentation (`tfs.md`, `transient.md`) for detailed signal recommendations. In general:
+- **Tone Burst** and **AM-Modulated signals** are highly sensitive to distributional shifts
+- **Multi-tone** provides baseline for steady-state-like behavior
+- **Music or complex program material** offers real-world validation with higher tolerance (MDI < 3.0 typically acceptable)
 
-| Signal Type | MDI Sensitivity | What MDI Reveals |
-|-------------|-----------------|------------------|
-| **Multi-tone** (`multitone`) | Medium | TFS group delay variation, transient response if tones have gating |
-| **Tone Burst** (`tone-burst`) | High | Transient attack/width consistency, TFS phase stability during attack/decay |
-| **AM-Modulated Tone** (`modulated`) | Medium-High | TFS correlation stability during modulation, transient event detection if AM is deep |
-| **Swept Sine** (`sweep`) | Medium | Frequency-dependent TFS and transient degradation |
-| **Notched Noise** (`notched-noise`) | Low-Medium | Primarily tests spectral fidelity; MDI can reveal transient edge artifacts |
-| **Music or Complex Program** | Very High | Real-world test; MDI captures distributional shifts across diverse transient and TFS conditions |
-
-### 5.2 Ideal Ranges by Signal Type
-
-- **Tone Burst**: MDI < 1.5 (transient-rich, should have consistent attack/width)
-- **Modulated Tone**: MDI < 2.0 (TFS correlation may vary slightly with modulation)
-- **Multi-tone**: MDI < 1.0 (steady-state-like, minimal distributional shifts expected)
-- **Music/Complex**: MDI < 3.0 (higher tolerance due to signal complexity and diverse features)
-
-### 5.3 Usage Notes
-
-- Always inspect component breakdowns to understand which domain contributes most to total MDI
-- Compare MDI across multiple test signals to identify signal-dependent artifacts
-- Use MDI in conjunction with average metrics (TFS mean correlation, transient event counts) to distinguish systematic vs intermittent issues
+Always inspect component breakdowns to understand which domain contributes most to total MDI, and compare across multiple signals to identify signal-dependent artifacts.
 
 ---
 
@@ -360,16 +263,10 @@ MDI is a **secondary metric** computed from TFS, Transient, and Binaural results
 
 ## Appendix: Common MDI Pitfalls
 
-1. **Interpreting MDI without component breakdown**: Always inspect `components` to understand which feature contributes most to total divergence.
+1. **Comparing MDI across different signal types**: MDI is signal-dependent; a tone burst naturally has lower MDI than complex music. Compare like-with-like.
 
-2. **Comparing MDI across different signal types**: MDI is signal-dependent; a tone burst naturally has lower MDI than complex music. Compare like-with-like.
+2. **Ignoring sample counts**: If `samples_dut` is very low (e.g., < 10), the distribution comparison is unreliable. Check sample counts in `components`.
 
-3. **Ignoring sample counts**: If `samples_dut` is very low (e.g., < 10), the distribution comparison is unreliable. Check sample counts in `components`.
+3. **Forgetting to align signals**: MDI assumes reference and DUT are pre-aligned. Misalignment will inflate transient divergence and TFS group delay.
 
-4. **Over-reliance on total score**: Use `channel_totals` and `component_totals` to localize issues to specific channels or domains.
-
-5. **Forgetting to align signals**: MDI assumes reference and DUT are pre-aligned. Misalignment will inflate transient divergence and TFS group delay.
-
-6. **Not accounting for silent segments**: Silent or very low-level segments may have zero-weight frames, reducing effective sample count. Inspect weights.
-
-7. **Assuming monotonic relationship with perceptual quality**: MDI measures distributional divergence, not perceptual distance. A high MDI may or may not be audible depending on the listener and context.
+4. **Assuming monotonic relationship with perceptual quality**: MDI measures distributional divergence, not perceptual distance. A high MDI may or may not be audible depending on the listener and context.
