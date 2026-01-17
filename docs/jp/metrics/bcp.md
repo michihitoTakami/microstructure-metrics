@@ -49,11 +49,14 @@ $$
 \(m\) の重みを joint RMS として定義します：
 
 $$
-w_{b,m} = \sqrt{\frac{1}{N}\sum_{n\in \mathrm{frame}} s[n]^2}
+w_{b,m} = \sqrt{\frac{1}{N}\sum_{n} v_{b,m}[n]^2}
 $$
 
-ここで \(s[n]\) は当該帯域フレーム内の参照/DUT および L/R をまとめたサンプル列です。
-`envelope_threshold_db` に基づく閾値より小さいフレームは無視します。
+ここで \(v_{b,m}\) は当該帯域フレーム内の
+\(\{y^{(\mathrm{ref})}_{b,L}, y^{(\mathrm{ref})}_{b,R},
+y^{(\mathrm{dut})}_{b,L}, y^{(\mathrm{dut})}_{b,R}\}\) を結合したサンプル列で、
+\(N\) は結合後のサンプル数です。`envelope_threshold_db` に基づく閾値より小さい
+フレームは無視します。
 
 ### 2.3 ILD（左右レベル差）
 
@@ -85,6 +88,9 @@ $$
 \mathrm{ITD}_{b,m} = \frac{\tau^\*}{f_s}\cdot 1000 \;\;[\mathrm{ms}],\quad
 \mathrm{IACC}_{b,m} = |\rho_{b,m}(\tau^\*)|
 $$
+
+参照とDUTそれぞれについて、対応する帯域信号を代入して
+\(\mathrm{ITD}_{b,m}\) と \(\mathrm{IACC}_{b,m}\) を計算します。
 
 ### 2.5 参照との差分と集約
 
@@ -148,8 +154,7 @@ BCP は、\(|\Delta \mathrm{ITD}|\)、\(|\Delta \mathrm{ILD}|\) を重み \(w_{b
 ### 3.3 エッジケースと特別な処理
 
 - 入力は `(samples, 2)` のステレオで、参照と DUT は同形状が必須。
-- 極小エネルギーのフレームは ITD/ILD/IACC が不安定になりやすいため、
-  `envelope_threshold_db` により除外されます。
+- 低エネルギーのフレームは `envelope_threshold_db` により除外されます。
 - `audio_freq_range` は Nyquist 未満へクリップされ、不正値は `ValueError`。
 
 ### 3.4 計算複雑度
@@ -236,7 +241,7 @@ uv run microstructure-metrics report ref.wav dut.wav \
 
 ## 付録：BCP の一般的な落とし穴
 
-1. **モノラルや疑似ステレオ**：BCP は 2ch の情報が必須です。
-2. **`report --channels ch0/ch1` を使う**：ステレオ依存メトリクスが無効になります。
-3. **整列失敗／ドリフト**：ITD の変化に見えてしまうことがあります。
-4. **低SNRフレーム**：ITD/IACC が不安定になるため、十分な信号エネルギーと閾値設定が重要です。
+1. **真のステレオでない**：モノラル化や `report --channels ch0/ch1` では BCP が
+   有効に働きません。
+2. **整列失敗／ドリフト**：ITD の変化に見えてしまうことがあります。
+3. **低SNRフレーム**：ITD/IACC が不安定になるため、十分な信号エネルギーと閾値設定が重要です。

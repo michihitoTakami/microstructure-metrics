@@ -51,12 +51,14 @@ For each band \(b\), split signals into frames of length \(L\) and hop \(H\).
 For a frame \(m\), compute a joint RMS weight:
 
 $$
-w_{b,m} = \sqrt{\frac{1}{N}\sum_{n\in \mathrm{frame}} s[n]^2}
+w_{b,m} = \sqrt{\frac{1}{N}\sum_{n} v_{b,m}[n]^2}
 $$
 
-where \(s[n]\) stacks ref/dut and L/R samples in that band and frame. Frames are
-ignored when \(w_{b,m}\) is below a threshold derived from the global peak and
-`envelope_threshold_db`.
+where \(v_{b,m}\) is the concatenation of the four band-limited frame signals
+\(\{y^{(\mathrm{ref})}_{b,L}, y^{(\mathrm{ref})}_{b,R},
+y^{(\mathrm{dut})}_{b,L}, y^{(\mathrm{dut})}_{b,R}\}\) and \(N\) is the number
+of samples in that concatenated vector. Frames are ignored when \(w_{b,m}\) is
+below a threshold derived from the global peak and `envelope_threshold_db`.
 
 ### 2.3 ILD (Interaural Level Difference)
 
@@ -89,6 +91,9 @@ $$
 \mathrm{ITD}_{b,m} = \frac{\tau^\*}{f_s}\cdot 1000 \;\;[\mathrm{ms}],\quad
 \mathrm{IACC}_{b,m} = |\rho_{b,m}(\tau^\*)|
 $$
+
+Compute \(\mathrm{ITD}_{b,m}\) and \(\mathrm{IACC}_{b,m}\) separately for
+reference and DUT by substituting the corresponding band signals.
 
 ### 2.5 Reference vs DUT Deltas and Summary Statistics
 
@@ -152,8 +157,7 @@ In `report` output, BCP lives under `metrics.binaural.summary.*` and
 ### 3.3 Edge Cases and Special Handling
 
 - Inputs must be stereo arrays `(samples, 2)` with matching shapes.
-- If a frame has near-zero energy, ITD/ILD/IACC default to 0.0 (and are typically
-  skipped by the envelope threshold).
+- Low-energy frames are skipped using the envelope threshold.
 - `audio_freq_range` is clipped to below Nyquist; invalid ranges raise
   `ValueError`.
 
@@ -243,9 +247,8 @@ uv run microstructure-metrics report ref.wav dut.wav \
 
 ## Appendix: Common BCP Pitfalls
 
-1. **Using mono or collapsed stereo**: BCP requires true 2ch content.
-2. **Running `report --channels ch0/ch1`**: stereo-specific metrics become
-   unavailable.
-3. **Poor alignment or drift**: timing errors can masquerade as ITD changes.
-4. **Low-SNR frames**: can produce unstable ITD/IACC; rely on the envelope
+1. **Not using true stereo**: BCP requires real 2ch content; avoid collapsed
+   mono or `report --channels ch0/ch1`.
+2. **Poor alignment or drift**: timing errors can masquerade as ITD changes.
+3. **Low-SNR frames**: can produce unstable ITD/IACC; rely on the envelope
    threshold and sufficient signal energy.
