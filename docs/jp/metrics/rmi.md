@@ -63,9 +63,9 @@ $$
 \tau_{\text{coarse}} = \arg\max_\tau \rho(\tau)
 $$
 
-**精密化された遅延**（放物線補間によるサブサンプル精度）：
+**精密化された遅延**（サブサンプル精度）：
 
-`refine_delay=True` の場合、相関ピークとその隣接点 \(\rho(\tau_{\text{coarse}} - 1)\)、\(\rho(\tau_{\text{coarse}})\)、\(\rho(\tau_{\text{coarse}} + 1)\) に放物線をフィットして、小数サンプル精度を得ます：
+`refine_delay=True` の場合、相関ピークとその隣接点に放物線補間を適用して、小数サンプル精度を得ます：
 
 $$
 \Delta_{\text{refined}} = \tau_{\text{coarse}} + \frac{\rho(\tau-1) - \rho(\tau+1)}{2[\rho(\tau-1) - 2\rho(\tau) + \rho(\tau+1)]}
@@ -73,27 +73,11 @@ $$
 
 **残差エネルギー精密化**（オプション）：
 
-`refine_fit=True` の場合、残差エネルギー \(E_r\) を最小化するために、\(\Delta_{\text{refined}}\) の周辺で0.05サンプルステップ、±0.75サンプルのウィンドウで局所探索を実行します：
-
-$$
-\Delta = \arg\min_{\delta \in [\Delta_{\text{refined}} - 0.75, \Delta_{\text{refined}} + 0.75]} E_r(\delta)
-$$
-
-ここで、残差エネルギーはスケール適合後に計算されます（以下参照）。
+`refine_fit=True` の場合、スケール適合後に残差エネルギーを最小化するために、\(\Delta_{\text{refined}}\) の周辺で局所探索を実行します（パラメータはSection 3.1参照）。
 
 #### 信号整列とトリミング
 
-線形補間を使用して参照を \(\Delta\) だけシフトします：
-
-$$
-\text{ref}_{\text{shifted}}(i) = \text{ref}(i - \Delta)
-$$
-
-補間が適切に定義される有効なオーバーラップ領域に両方の信号をトリミングします：
-- 開始インデックス：\(\max(0, \lceil \Delta \rceil)\)
-- 終了インデックス：\(\min(N, \lfloor (N-1) + \Delta \rfloor + 1)\)
-
-これにより、等長の整列信号 \(\text{ref}_{\text{aligned}}\) と \(\text{dut}_{\text{aligned}}\) が生成されます。
+参照を \(\Delta\) だけ線形補間によりシフトし、補間が適切に定義される有効なオーバーラップ領域に両方の信号をトリミングします。これにより、等長の整列信号 \(\text{ref}_{\text{aligned}}\) と \(\text{dut}_{\text{aligned}}\) が生成されます。
 
 #### スケール推定
 
@@ -381,10 +365,6 @@ RMI計算は以下のステップで構成されます：
 
 #### A. **ホワイトノイズ** (`white-noise`)
 
-**生成パラメータ**：
-- 平坦なスペクトラム、20–20k Hz
-- 一様振幅分布
-
 **RMI が明かすこと**：
 - **理想的デバイス**：残差も白色ノイズ様であるべき（尖度 ≈ 3、スペクトル平坦度 ≈ 0.9、自己相関ピーク ≈ 0）
 - **非線形デバイス**：尖度が増加（クリッピング、ドロップアウト）；スペクトル平坦度が減少（高調波内容）
@@ -393,9 +373,6 @@ RMI計算は以下のステップで構成されます：
 ---
 
 #### B. **トーンバースト** (`tone-burst`)
-
-**生成パラメータ**：
-- 8 kHz サイン波、10周期、±2 ms ハン窓フェード
 
 **RMI が明かすこと**：
 - **リンギング**：上昇した尖度、自己相関ピーク、リンギング周波数に対応するラグ
@@ -406,9 +383,6 @@ RMI計算は以下のステップで構成されます：
 
 #### C. **マルチトーン** (`multitone`)
 
-**生成パラメータ**：
-- 異なる周波数の複数のサイン波（例：100、500、1000、5000 Hz）
-
 **RMI が明かすこと**：
 - **相互変調歪み**：スペクトル平坦度が減少、残差がIMD周波数でトーナル内容を持つ
 - **位相非線形性**：IMD積が互いに変調する場合、高変調比が増加する可能性
@@ -417,9 +391,6 @@ RMI計算は以下のステップで構成されます：
 ---
 
 #### D. **スイープサイン** (`sweep`)
-
-**生成パラメータ**：
-- 20 Hzから20 kHzへの対数周波数スイープ
 
 **RMI が明かすこと**：
 - **周波数依存非線形性**：デバイスが非線形な帯域で尖度とクレストファクタが増加
@@ -451,17 +422,8 @@ uv run microstructure-metrics generate white-noise \
 uv run microstructure-metrics report ref.wav dut.wav \
   --metrics residual --output report.json
 
-# 4. またはプログラムアクセスにPython APIを使用
-python -c "
-from microstructure_metrics.metrics.residual import calculate_residual_microstructure
-import soundfile as sf
-ref, sr = sf.read('ref.wav')
-dut, _ = sf.read('dut.wav')
-result = calculate_residual_microstructure(reference=ref, dut=dut, sample_rate=sr)
-print(f'尖度: {result.kurtosis:.3f}')
-print(f'スペクトル平坦度: {result.spectral_flatness:.3f}')
-print(f'自己相関ピーク超過: {result.autocorr_peak_excess:.3f}、{result.autocorr_peak_lag_ms:.3f} ms')
-"
+# 4. 主要指標を確認
+jq '.metrics.ch0.residual | {kurtosis, spectral_flatness, autocorr_peak_excess}' report.json
 ```
 
 ---
@@ -498,16 +460,12 @@ print(f'自己相関ピーク超過: {result.autocorr_peak_excess:.3f}、{result
 
 ## 付録：RMI の一般的な落とし穴
 
-1. **整列を忘れる**：RMIは整列された信号を必要とします。`calculate_residual_microstructure()` を呼び出す前に、パイロットトーンまたはグローバル相互相関を使用してください。
+1. **前処理の不備**：RMIは整列およびレベル合わせされた信号を必要とします。`calculate_residual_microstructure()` を呼び出す前に、パイロットトーンまたは相互相関で整列し、レベルを正規化してください。
 
-2. **残差RMSを誤解する**：低い残差RMSはクリーンなオーディオを保証しません；尖度、スペクトル平坦度、自己相関ピークをチェックしてアーティファクト構造を評価してください。
+2. **不完全な解釈**：低い残差RMS単独ではアーティファクトのないオーディオを保証しません。尖度、スペクトル平坦度、変調比、自己相関ピークを総合的に評価して、残差構造を判断してください。
 
-3. **変調比を無視する**：高いスペクトル平坦度だが高い変調比は包絡アーティファクトを示します；両方の次元を考慮する必要があります。
+3. **不適切なテスト信号**：RMIは複雑な信号（ノイズ、マルチトーン、過渡）で最も有益です。純粋なサイン波はIMD、包絡アーティファクト、または周波数依存の問題をマスクする可能性があります。
 
-4. **定常信号のみ使用**：RMIは複雑な信号（ノイズ、マルチトーン、過渡）で最も有益；純粋なサイン波はIMDまたは包絡問題を隠す可能性があります。
+4. **信号長の不足**：尖度とスペクトル平坦度は安定性のために十分なサンプルを必要とします。信頼できる推定には≥10秒の信号を使用；短い信号（<1秒）は信頼性の低い統計を生成する可能性があります。
 
-5. **異なるレベルの信号を比較する**：レベル不一致はスケール推定と残差RMSに影響します。RMIを計算する前に必ず参照とDUTをレベル合わせしてください。
-
-6. **短い信号での尖度の過度解釈**：尖度推定は安定性のために十分なサンプル（>1000）を必要とします；信頼できる尖度値には長い信号（≥10秒）を使用してください。
-
-7. **予想範囲外の自己相関ラグ**：`autocorr_peak_lag_ms` が非常に短い（<0.1 ms）または非常に長い（>10 ms）場合、サンプルレートと `autocorr_max_lag_ms` が正しいことを確認してください。
+5. **パラメータの検証**：`autocorr_peak_lag_ms` が予想範囲外（<0.1 msまたは>10 ms）の場合、サンプルレートと `autocorr_max_lag_ms` の設定が信号タイプに適切か確認してください。

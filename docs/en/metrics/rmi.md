@@ -63,9 +63,9 @@ $$
 \tau_{\text{coarse}} = \arg\max_\tau \rho(\tau)
 $$
 
-**Refined delay** (sub-sample via parabolic interpolation):
+**Refined delay** (sub-sample precision):
 
-If `refine_delay=True`, fit a parabola to the correlation peak and its neighbors \(\rho(\tau_{\text{coarse}} - 1)\), \(\rho(\tau_{\text{coarse}})\), \(\rho(\tau_{\text{coarse}} + 1)\) to obtain fractional-sample precision:
+If `refine_delay=True`, parabolic interpolation is applied to the correlation peak and its neighbors to obtain fractional-sample precision:
 
 $$
 \Delta_{\text{refined}} = \tau_{\text{coarse}} + \frac{\rho(\tau-1) - \rho(\tau+1)}{2[\rho(\tau-1) - 2\rho(\tau) + \rho(\tau+1)]}
@@ -73,27 +73,11 @@ $$
 
 **Residual energy refinement** (optional):
 
-If `refine_fit=True`, perform a local search around \(\Delta_{\text{refined}}\) in steps of 0.05 samples over a window of ±0.75 samples to minimize the residual energy \(E_r\):
-
-$$
-\Delta = \arg\min_{\delta \in [\Delta_{\text{refined}} - 0.75, \Delta_{\text{refined}} + 0.75]} E_r(\delta)
-$$
-
-where the residual energy is computed after scale fitting (see below).
+If `refine_fit=True`, a local search around \(\Delta_{\text{refined}}\) minimizes the residual energy after scale fitting (parameters in Section 3.1).
 
 #### Signal Alignment and Trimming
 
-Shift the reference by \(\Delta\) using linear interpolation:
-
-$$
-\text{ref}_{\text{shifted}}(i) = \text{ref}(i - \Delta)
-$$
-
-Trim both signals to the valid overlap region where interpolation is well-defined:
-- Start index: \(\max(0, \lceil \Delta \rceil)\)
-- End index: \(\min(N, \lfloor (N-1) + \Delta \rfloor + 1)\)
-
-This produces aligned signals \(\text{ref}_{\text{aligned}}\) and \(\text{dut}_{\text{aligned}}\) of equal length.
+The reference is shifted by \(\Delta\) using linear interpolation, then both signals are trimmed to the valid overlap region where interpolation is well-defined. This produces aligned signals \(\text{ref}_{\text{aligned}}\) and \(\text{dut}_{\text{aligned}}\) of equal length.
 
 #### Scale Estimation
 
@@ -381,10 +365,6 @@ The repository includes several test signal types (see `src/microstructure_metri
 
 #### A. **White Noise** (`white-noise`)
 
-**Generator Parameters**:
-- Flat spectrum, 20–20k Hz
-- Uniform amplitude distribution
-
 **What RMI reveals**:
 - **Ideal device**: residual should also be white noise-like (kurtosis ≈ 3, spectral flatness ≈ 0.9, autocorr peak ≈ 0)
 - **Nonlinear device**: kurtosis increases (clipping, dropout); spectral flatness decreases (harmonic content)
@@ -393,9 +373,6 @@ The repository includes several test signal types (see `src/microstructure_metri
 ---
 
 #### B. **Tone Burst** (`tone-burst`)
-
-**Generator Parameters**:
-- 8 kHz sine, 10 cycles, ±2 ms Hann window fade
 
 **What RMI reveals**:
 - **Ringing**: elevated kurtosis, autocorr peak, and lag corresponding to ringing frequency
@@ -406,9 +383,6 @@ The repository includes several test signal types (see `src/microstructure_metri
 
 #### C. **Multitone** (`multitone`)
 
-**Generator Parameters**:
-- Multiple sine waves at different frequencies (e.g., 100, 500, 1000, 5000 Hz)
-
 **What RMI reveals**:
 - **Intermodulation distortion**: spectral flatness decreases, residual has tonal content at IMD frequencies
 - **Phase nonlinearity**: high-mod-ratio may increase if IMD products modulate each other
@@ -417,9 +391,6 @@ The repository includes several test signal types (see `src/microstructure_metri
 ---
 
 #### D. **Swept Sine** (`sweep`)
-
-**Generator Parameters**:
-- Logarithmic frequency sweep from 20 Hz to 20 kHz
 
 **What RMI reveals**:
 - **Frequency-dependent nonlinearity**: kurtosis and crest factor increase in bands where device is nonlinear
@@ -451,17 +422,8 @@ uv run microstructure-metrics generate white-noise \
 uv run microstructure-metrics report ref.wav dut.wav \
   --metrics residual --output report.json
 
-# 4. Or use Python API for programmatic access
-python -c "
-from microstructure_metrics.metrics.residual import calculate_residual_microstructure
-import soundfile as sf
-ref, sr = sf.read('ref.wav')
-dut, _ = sf.read('dut.wav')
-result = calculate_residual_microstructure(reference=ref, dut=dut, sample_rate=sr)
-print(f'Kurtosis: {result.kurtosis:.3f}')
-print(f'Spectral flatness: {result.spectral_flatness:.3f}')
-print(f'AC peak excess: {result.autocorr_peak_excess:.3f} at {result.autocorr_peak_lag_ms:.3f} ms')
-"
+# 4. Inspect key metrics
+jq '.metrics.ch0.residual | {kurtosis, spectral_flatness, autocorr_peak_excess}' report.json
 ```
 
 ---
@@ -498,16 +460,12 @@ print(f'AC peak excess: {result.autocorr_peak_excess:.3f} at {result.autocorr_pe
 
 ## Appendix: Common RMI Pitfalls
 
-1. **Forgetting alignment**: RMI requires aligned signals. Use pilot tones or global cross-correlation before calling `calculate_residual_microstructure()`.
+1. **Inadequate preprocessing**: RMI requires aligned and level-matched signals. Use pilot tones or cross-correlation for alignment, and normalize levels before calling `calculate_residual_microstructure()`.
 
-2. **Misinterpreting residual RMS**: A low residual RMS doesn't guarantee clean audio; check kurtosis, spectral flatness, and autocorr peak to assess artifact structure.
+2. **Incomplete interpretation**: Low residual RMS alone doesn't guarantee artifact-free audio. Always examine kurtosis, spectral flatness, modulation ratios, and autocorr peak together to assess residual structure.
 
-3. **Ignoring modulation ratios**: High spectral flatness but high modulation ratios indicate envelope artifacts; both dimensions must be considered.
+3. **Inappropriate test signals**: RMI is most informative with complex signals (noise, multitone, transients). Pure sine waves may mask IMD, envelope artifacts, or frequency-dependent issues.
 
-4. **Using stationary signals only**: RMI is most informative with complex signals (noise, multitone, transients); pure sine waves may hide IMD or envelope issues.
+4. **Insufficient signal length**: Kurtosis and spectral flatness require adequate samples for stability. Use signals ≥10 s for reliable estimates; short signals (<1 s) may produce unreliable statistics.
 
-5. **Comparing signals at different levels**: Level mismatch affects scale estimation and residual RMS. Always level-match reference and DUT before computing RMI.
-
-6. **Over-interpreting kurtosis on short signals**: Kurtosis estimates require sufficient samples (>1000) for stability; use longer signals (≥10 s) for reliable kurtosis values.
-
-7. **Autocorr lag out of expected range**: If `autocorr_peak_lag_ms` is very short (<0.1 ms) or very long (>10 ms), verify that the sample rate and `autocorr_max_lag_ms` are correct.
+5. **Parameter verification**: If `autocorr_peak_lag_ms` falls outside expected ranges (<0.1 ms or >10 ms), verify sample rate and `autocorr_max_lag_ms` settings are appropriate for the signal type.
