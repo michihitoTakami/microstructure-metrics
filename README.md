@@ -62,6 +62,31 @@ uv run microstructure-metrics report ref.aligned_ref.wav dut.aligned_dut.wav \
   --output-json report.json --output-md report.md
 ```
 
+## Measurement workflow (sample → record → report)
+
+1) Generate a reference signal (example: notched noise).
+
+```bash
+uv run microstructure-metrics generate notched-noise \
+  --with-metadata \
+  --output ./measure/ref_notched_noise.wav
+```
+
+2) Play the reference WAV through the DAC/AMP under test and record the output
+   as a DUT WAV (do not trim silence). See `docs/en/measurement-setup.md` or
+   `docs/jp/measurement-setup.md` for setup details.
+
+3) Run the report to compute all metrics (including THD+N) and export outputs.
+
+```bash
+uv run microstructure-metrics report \
+  ./measure/ref_notched_noise.wav \
+  ./measure/dut_notched_noise.wav \
+  --output-json ./measure/report.json \
+  --output-md ./measure/report.md \
+  --plot
+```
+
 ## Documentation
 
 - User Guide (EN): `docs/en/user-guide.md`
